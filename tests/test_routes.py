@@ -1844,6 +1844,211 @@ class TestQuickCheckWasteScheduleError:
         assert 'waste_schedule_error' in response.json
 
 
+# ============== Phase 10: Snow Status (Geolocation) Tests ==============
+
+class TestSnowStatusEndpoint:
+    """Tests for GET /snow-status endpoint (Task 10.1)."""
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_valid_coords(self, mock_reverse, mock_check, client):
+        """Verify endpoint returns snow status for valid coordinates."""
+        mock_check.return_value = {
+            'has_operation': False,
+            'streets': [],
+            'search_radius': 200
+        }
+        mock_reverse.return_value = 'Rue Saint-Jean'
+
+        response = client.get('/snow-status?lat=46.8123&lon=-71.2145')
+
+        assert response.status_code == 200
+        assert 'has_operation' in response.json
+        assert response.json['has_operation'] is False
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_with_operation(self, mock_reverse, mock_check, client):
+        """Verify endpoint returns streets when operation is active."""
+        mock_check.return_value = {
+            'has_operation': True,
+            'streets': ['Rue Saint-Jean', 'Avenue Cartier'],
+            'search_radius': 200
+        }
+        mock_reverse.return_value = 'Rue Saint-Jean'
+
+        response = client.get('/snow-status?lat=46.8123&lon=-71.2145')
+
+        assert response.status_code == 200
+        assert response.json['has_operation'] is True
+        assert len(response.json['streets_affected']) == 2
+        assert 'Rue Saint-Jean' in response.json['streets_affected']
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_includes_coordinates(self, mock_reverse, mock_check, client):
+        """Verify response includes the coordinates."""
+        mock_check.return_value = {'has_operation': False, 'streets': [], 'search_radius': 200}
+        mock_reverse.return_value = 'Unknown'
+
+        response = client.get('/snow-status?lat=46.8123&lon=-71.2145')
+
+        assert response.status_code == 200
+        assert 'coordinates' in response.json
+        assert response.json['coordinates']['lat'] == 46.8123
+        assert response.json['coordinates']['lon'] == -71.2145
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_includes_search_radius(self, mock_reverse, mock_check, client):
+        """Verify response includes search_radius_meters."""
+        mock_check.return_value = {'has_operation': False, 'streets': [], 'search_radius': 200}
+        mock_reverse.return_value = 'Unknown'
+
+        response = client.get('/snow-status?lat=46.8123&lon=-71.2145')
+
+        assert response.status_code == 200
+        assert 'search_radius_meters' in response.json
+        assert response.json['search_radius_meters'] == 200
+
+
+class TestSnowStatusValidation:
+    """Tests for /snow-status input validation (Task 10.2)."""
+
+    def test_snow_status_missing_lat(self, client):
+        """Verify 400 error when lat is missing."""
+        response = client.get('/snow-status?lon=-71.2')
+
+        assert response.status_code == 400
+        assert 'Missing required parameters' in response.json['error']
+
+    def test_snow_status_missing_lon(self, client):
+        """Verify 400 error when lon is missing."""
+        response = client.get('/snow-status?lat=46.8')
+
+        assert response.status_code == 400
+        assert 'Missing required parameters' in response.json['error']
+
+    def test_snow_status_missing_both(self, client):
+        """Verify 400 error when both params are missing."""
+        response = client.get('/snow-status')
+
+        assert response.status_code == 400
+        assert 'Missing required parameters' in response.json['error']
+
+    def test_snow_status_non_numeric_lat(self, client):
+        """Verify 400 error for non-numeric lat."""
+        response = client.get('/snow-status?lat=abc&lon=-71.2')
+
+        assert response.status_code == 400
+        assert 'Invalid coordinates' in response.json['error']
+
+    def test_snow_status_non_numeric_lon(self, client):
+        """Verify 400 error for non-numeric lon."""
+        response = client.get('/snow-status?lat=46.8&lon=xyz')
+
+        assert response.status_code == 400
+        assert 'Invalid coordinates' in response.json['error']
+
+    def test_snow_status_lat_too_high(self, client):
+        """Verify 400 error when lat > 90."""
+        response = client.get('/snow-status?lat=91&lon=-71.2')
+
+        assert response.status_code == 400
+        assert 'Invalid latitude' in response.json['error']
+
+    def test_snow_status_lat_too_low(self, client):
+        """Verify 400 error when lat < -90."""
+        response = client.get('/snow-status?lat=-91&lon=-71.2')
+
+        assert response.status_code == 400
+        assert 'Invalid latitude' in response.json['error']
+
+    def test_snow_status_lon_too_high(self, client):
+        """Verify 400 error when lon > 180."""
+        response = client.get('/snow-status?lat=46.8&lon=181')
+
+        assert response.status_code == 400
+        assert 'Invalid longitude' in response.json['error']
+
+    def test_snow_status_lon_too_low(self, client):
+        """Verify 400 error when lon < -180."""
+        response = client.get('/snow-status?lat=46.8&lon=-181')
+
+        assert response.status_code == 400
+        assert 'Invalid longitude' in response.json['error']
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_boundary_coords_valid(self, mock_reverse, mock_check, client):
+        """Verify boundary coordinates are accepted."""
+        mock_check.return_value = {'has_operation': False, 'streets': [], 'search_radius': 200}
+        mock_reverse.return_value = 'Unknown'
+
+        # Test boundary values
+        response = client.get('/snow-status?lat=90&lon=180')
+        assert response.status_code == 200
+
+        response = client.get('/snow-status?lat=-90&lon=-180')
+        assert response.status_code == 200
+
+
+class TestSnowStatusLocationName:
+    """Tests for /snow-status location_name field (Task 10.3)."""
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_includes_location_name(self, mock_reverse, mock_check, client):
+        """Verify response includes location_name."""
+        mock_check.return_value = {'has_operation': False, 'streets': [], 'search_radius': 200}
+        mock_reverse.return_value = 'Boulevard Laurier'
+
+        response = client.get('/snow-status?lat=46.8&lon=-71.2')
+
+        assert response.status_code == 200
+        assert 'location_name' in response.json
+        assert response.json['location_name'] == 'Boulevard Laurier'
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_location_name_unknown_fallback(self, mock_reverse, mock_check, client):
+        """Verify location_name falls back to 'Unknown'."""
+        mock_check.return_value = {'has_operation': False, 'streets': [], 'search_radius': 200}
+        mock_reverse.return_value = 'Unknown'
+
+        response = client.get('/snow-status?lat=46.8&lon=-71.2')
+
+        assert response.status_code == 200
+        assert response.json['location_name'] == 'Unknown'
+
+
+class TestSnowStatusErrorHandling:
+    """Tests for /snow-status error handling (Task 10.4)."""
+
+    @patch('app.routes.check_snow_removal')
+    def test_snow_status_api_failure(self, mock_check, client):
+        """Verify 500 error when snow API fails."""
+        mock_check.side_effect = Exception("API connection failed")
+
+        response = client.get('/snow-status?lat=46.8&lon=-71.2')
+
+        assert response.status_code == 500
+        assert 'Failed to check snow removal status' in response.json['error']
+
+    @patch('app.routes.check_snow_removal')
+    @patch('app.routes.reverse_geocode')
+    def test_snow_status_includes_message(self, mock_reverse, mock_check, client):
+        """Verify response includes message field."""
+        mock_check.return_value = {'has_operation': True, 'streets': ['Rue Test'], 'search_radius': 200}
+        mock_reverse.return_value = 'Rue Test'
+
+        response = client.get('/snow-status?lat=46.8&lon=-71.2')
+
+        assert response.status_code == 200
+        assert 'message' in response.json
+        assert 'Snow removal in progress' in response.json['message']
+
+
 class TestErrorHandlers:
     def test_404_error(self, client):
         response = client.get('/nonexistent-page')

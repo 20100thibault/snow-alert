@@ -699,6 +699,120 @@
             }
         }
 
+        /* Location Button */
+        .location-divider {
+            display: flex;
+            align-items: center;
+            margin: 16px 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .location-divider::before,
+        .location-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        .location-divider span {
+            padding: 0 12px;
+        }
+
+        .btn-location {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 20px;
+            background: white;
+            border: 2px solid var(--accent-color);
+            color: var(--accent-color);
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-location:hover {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .btn-location:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-location svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .btn-location.loading {
+            background: var(--background-secondary);
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        /* Location Results Card */
+        .location-result-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .location-result-header svg {
+            width: 20px;
+            height: 20px;
+            color: var(--accent-color);
+        }
+
+        .location-result-header .location-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .location-result-header .coordinates {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: auto;
+        }
+
+        /* Spinning animation for loading */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Info card style */
+        .result-card.info {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
+            border-color: rgba(0, 113, 227, 0.2);
+        }
+
+        .result-card.info .result-card-value {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Streets affected styling */
+        .streets-affected {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
         /* Quick Check Results */
         .quick-check-results {
             display: none;
@@ -858,6 +972,21 @@
                         Check Now
                     </button>
                 </form>
+
+                <div class="location-divider"><span>or</span></div>
+
+                <button type="button" id="useLocationBtn" class="btn-location">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <circle cx="12" cy="12" r="3"/>
+                        <line x1="12" y1="2" x2="12" y2="4"/>
+                        <line x1="12" y1="20" x2="12" y2="22"/>
+                        <line x1="2" y1="12" x2="4" y2="12"/>
+                        <line x1="20" y1="12" x2="22" y2="12"/>
+                    </svg>
+                    Use My Location
+                </button>
+
                 <div id="quickCheckMessage" class="message"></div>
 
                 <!-- Quick Check Results -->
@@ -1343,6 +1472,163 @@
             btn.disabled = false;
             btn.classList.remove('btn-loading');
         });
+
+        // Geolocation button handler
+        document.getElementById('useLocationBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('useLocationBtn');
+            const msg = document.getElementById('quickCheckMessage');
+            const results = document.getElementById('quickCheckResults');
+            const grid = document.getElementById('resultsGrid');
+
+            // Check if geolocation is supported
+            if (!navigator.geolocation) {
+                msg.textContent = 'Geolocation is not supported by your browser. Please enter a postal code instead.';
+                msg.className = 'message error';
+                return;
+            }
+
+            // Set loading state
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                    <circle cx="12" cy="12" r="10"/>
+                </svg>
+                Getting location...
+            `;
+            msg.className = 'message';
+            results.classList.remove('visible');
+
+            try {
+                // Get current position
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 60000
+                    });
+                });
+
+                const { latitude, longitude } = position.coords;
+
+                // Update button to show we're checking
+                btn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                    Checking snow status...
+                `;
+
+                // Call the API
+                const response = await fetch(`/snow-status?lat=${latitude}&lon=${longitude}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    msg.className = 'message';
+                    displayLocationResults(data, grid);
+                    results.classList.add('visible');
+                } else {
+                    msg.textContent = data.error || 'Unable to check status. Please try again.';
+                    msg.className = 'message error';
+                }
+
+            } catch (error) {
+                // Handle geolocation errors
+                if (error.code) {
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            msg.textContent = 'Location access denied. Please enable location permissions in your browser settings, or enter a postal code instead.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            msg.textContent = 'Location unavailable. Please try again or enter a postal code instead.';
+                            break;
+                        case error.TIMEOUT:
+                            msg.textContent = 'Location request timed out. Please try again or enter a postal code instead.';
+                            break;
+                        default:
+                            msg.textContent = 'Unable to get your location. Please enter a postal code instead.';
+                    }
+                } else {
+                    msg.textContent = 'Network error. Please try again.';
+                }
+                msg.className = 'message error';
+            }
+
+            // Reset button
+            btn.disabled = false;
+            btn.classList.remove('loading');
+            btn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="3"/>
+                    <line x1="12" y1="2" x2="12" y2="4"/>
+                    <line x1="12" y1="20" x2="12" y2="22"/>
+                    <line x1="2" y1="12" x2="4" y2="12"/>
+                    <line x1="20" y1="12" x2="22" y2="12"/>
+                </svg>
+                Use My Location
+            `;
+        });
+
+        // Display location-based results (snow only)
+        function displayLocationResults(data, container) {
+            container.innerHTML = '';
+
+            // Location header
+            const header = document.createElement('div');
+            header.className = 'location-result-header';
+            header.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span class="location-name">${data.location_name || 'Your Location'}</span>
+                <span class="coordinates">${data.search_radius_meters || 200}m radius</span>
+            `;
+            container.appendChild(header);
+
+            // Snow status card
+            const snowCard = document.createElement('div');
+            snowCard.className = 'result-card snow';
+            const hasOperation = data.has_operation;
+            snowCard.innerHTML = `
+                <div class="result-card-icon">❄️</div>
+                <div class="result-card-content">
+                    <div class="result-card-label">Snow Removal Status</div>
+                    <div class="result-card-value">${hasOperation ? 'Active - Move your car!' : 'No operation scheduled'}</div>
+                    ${data.streets_affected && data.streets_affected.length > 0 ?
+                        `<div class="streets-affected">Affected: ${data.streets_affected.join(', ')}</div>` : ''}
+                </div>
+                <span class="result-card-status ${hasOperation ? 'active' : 'inactive'}">
+                    ${hasOperation ? 'ACTIVE' : 'Clear'}
+                </span>
+            `;
+            container.appendChild(snowCard);
+
+            // Info note about waste
+            const infoCard = document.createElement('div');
+            infoCard.className = 'result-card info';
+            infoCard.innerHTML = `
+                <div class="result-card-icon">ℹ️</div>
+                <div class="result-card-content">
+                    <div class="result-card-label">Garbage & Recycling</div>
+                    <div class="result-card-value">Enter your postal code above to check waste collection dates</div>
+                </div>
+            `;
+            container.appendChild(infoCard);
+
+            // Check Again button
+            const checkAgainBtn = document.createElement('button');
+            checkAgainBtn.type = 'button';
+            checkAgainBtn.className = 'btn btn-secondary';
+            checkAgainBtn.style.marginTop = '16px';
+            checkAgainBtn.style.width = '100%';
+            checkAgainBtn.textContent = 'Check Again';
+            checkAgainBtn.addEventListener('click', () => {
+                document.getElementById('useLocationBtn').click();
+            });
+            container.appendChild(checkAgainBtn);
+        }
 
         // Display quick check results
         function displayQuickCheckResults(data, container) {

@@ -1588,10 +1588,259 @@
           }
         }
       ]
+    },
+    {
+      "id": "phase-10",
+      "name": "Mobile Geolocation Snow Check",
+      "description": "Allow mobile users to check snow removal status at their current GPS location",
+      "tasks": [
+        {
+          "id": "10.1",
+          "name": "Create /snow-status endpoint accepting lat/lon params",
+          "description": "New endpoint that accepts latitude/longitude query parameters and returns snow removal status",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-10.1",
+            "name": "test_snow_status_valid_coords",
+            "file": "tests/test_routes.py",
+            "description": "Verify endpoint returns snow status for valid coordinates",
+            "assertions": [
+              "GET /snow-status?lat=46.8&lon=-71.2 returns 200",
+              "Response includes has_operation boolean",
+              "Response includes coordinates in response",
+              "Response includes search_radius_meters"
+            ]
+          }
+        },
+        {
+          "id": "10.2",
+          "name": "Add input validation for lat/lon",
+          "description": "Validate latitude (-90 to 90) and longitude (-180 to 180) ranges",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-10.2",
+            "name": "test_snow_status_invalid_coords",
+            "file": "tests/test_routes.py",
+            "description": "Verify endpoint rejects invalid coordinates",
+            "assertions": [
+              "lat > 90 returns 400 error",
+              "lat < -90 returns 400 error",
+              "lon > 180 returns 400 error",
+              "lon < -180 returns 400 error",
+              "Missing lat returns 400 error",
+              "Missing lon returns 400 error",
+              "Non-numeric values return 400 error"
+            ]
+          }
+        },
+        {
+          "id": "10.3",
+          "name": "Add reverse geocode to response",
+          "description": "Include location_name in response by reverse geocoding the coordinates",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-10.3",
+            "name": "test_snow_status_includes_location_name",
+            "file": "tests/test_routes.py",
+            "description": "Verify response includes human-readable location name",
+            "assertions": [
+              "Response includes location_name field",
+              "location_name is a string",
+              "Falls back to 'Unknown' if reverse geocode fails"
+            ]
+          }
+        },
+        {
+          "id": "10.4",
+          "name": "Handle edge cases and API errors",
+          "description": "Graceful handling of snow API failures and edge cases",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-10.4",
+            "name": "test_snow_status_error_handling",
+            "file": "tests/test_routes.py",
+            "description": "Verify graceful error handling",
+            "assertions": [
+              "Returns 200 with has_operation=false when no data",
+              "Returns 500 with error message on API failure",
+              "Logs errors appropriately"
+            ]
+          }
+        },
+        {
+          "id": "10.5",
+          "name": "Add Use My Location button to UI",
+          "description": "Add geolocation button to Quick Check section",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.5",
+            "name": "test_location_button_exists",
+            "file": "tests/test_templates.py",
+            "description": "Verify location button is present in template",
+            "assertions": [
+              "Button with id 'use-location-btn' exists",
+              "Button has location icon or text",
+              "Button is visible on mobile"
+            ]
+          }
+        },
+        {
+          "id": "10.6",
+          "name": "Implement Geolocation API call in JS",
+          "description": "Use navigator.geolocation to get user coordinates",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.6",
+            "name": "test_geolocation_function_exists",
+            "file": null,
+            "description": "Manual test: geolocation prompt appears",
+            "assertions": [
+              "checkMyLocation function exists",
+              "Calls navigator.geolocation.getCurrentPosition",
+              "Passes coordinates to API on success"
+            ]
+          }
+        },
+        {
+          "id": "10.7",
+          "name": "Add loading state while getting location",
+          "description": "Show spinner/loading text while GPS and API calls in progress",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.7",
+            "name": "test_location_loading_state",
+            "file": null,
+            "description": "Manual test: loading indicator shows",
+            "assertions": [
+              "Loading spinner appears when button clicked",
+              "Button disabled during loading",
+              "Loading text says 'Getting location...'"
+            ]
+          }
+        },
+        {
+          "id": "10.8",
+          "name": "Handle permission denied gracefully",
+          "description": "Show helpful message when user denies location permission",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.8",
+            "name": "test_permission_denied_handling",
+            "file": null,
+            "description": "Manual test: permission denied shows message",
+            "assertions": [
+              "Error message displayed when permission denied",
+              "Message explains how to enable location",
+              "User can still use postal code input"
+            ]
+          }
+        },
+        {
+          "id": "10.9",
+          "name": "Handle geolocation errors",
+          "description": "Handle timeout, position unavailable, and other geolocation errors",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.9",
+            "name": "test_geolocation_error_handling",
+            "file": null,
+            "description": "Manual test: errors handled gracefully",
+            "assertions": [
+              "Timeout shows appropriate message",
+              "Position unavailable shows appropriate message",
+              "Unknown errors show generic message"
+            ]
+          }
+        },
+        {
+          "id": "10.10",
+          "name": "Display results in location-aware card",
+          "description": "Show snow status results with location name prominently displayed",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.10",
+            "name": "test_location_results_display",
+            "file": null,
+            "description": "Manual test: results show location info",
+            "assertions": [
+              "Location name displayed in results",
+              "Snow status clearly shown",
+              "Streets affected listed if operation active"
+            ]
+          }
+        },
+        {
+          "id": "10.11",
+          "name": "Add Check Again button",
+          "description": "Allow user to refresh their location and check again",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.11",
+            "name": "test_check_again_button",
+            "file": null,
+            "description": "Manual test: can re-check location",
+            "assertions": [
+              "Check Again button appears after results",
+              "Clicking triggers new geolocation request",
+              "Results update with new check"
+            ]
+          }
+        },
+        {
+          "id": "10.12",
+          "name": "Mobile-responsive styling",
+          "description": "Ensure location UI looks good on mobile devices",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-10.12",
+            "name": "test_mobile_responsive",
+            "file": null,
+            "description": "Manual test: UI works on mobile",
+            "assertions": [
+              "Button is easily tappable (44px minimum)",
+              "Results readable on small screens",
+              "No horizontal scrolling required"
+            ]
+          }
+        },
+        {
+          "id": "10.13",
+          "name": "Add distance info to response",
+          "description": "Show search radius in response for transparency",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-10.13",
+            "name": "test_distance_in_response",
+            "file": "tests/test_routes.py",
+            "description": "Verify distance/radius shown in response",
+            "assertions": [
+              "Response includes search_radius_meters",
+              "UI displays search radius to user"
+            ]
+          }
+        },
+        {
+          "id": "10.14",
+          "name": "Integration test for geolocation flow",
+          "description": "End-to-end test of the complete geolocation feature",
+          "file": "tests/test_routes.py",
+          "test": {
+            "id": "test-10.14",
+            "name": "test_geolocation_integration",
+            "file": "tests/test_routes.py",
+            "description": "Full integration test with mocked geolocation",
+            "assertions": [
+              "Valid coords return complete response",
+              "Response has all required fields",
+              "Error cases handled correctly"
+            ]
+          }
+        }
+      ]
     }
   ],
-  "total_tasks": 77,
-  "total_tests": 77,
+  "total_tasks": 91,
+  "total_tests": 91,
   "summary": {
     "phase_1_tasks": 12,
     "phase_2_tasks": 8,
@@ -1601,6 +1850,7 @@
     "phase_6_tasks": 8,
     "phase_7_tasks": 10,
     "phase_8_tasks": 8,
-    "phase_9_tasks": 6
+    "phase_9_tasks": 6,
+    "phase_10_tasks": 14
   }
 }

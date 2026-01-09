@@ -11,7 +11,7 @@ from app.database import (
     add_user, get_user_by_email, remove_user,
     update_user_preferences, get_waste_zone_by_id
 )
-from app.snow_checker import geocode_postal_code, check_postal_code
+from app.snow_checker import geocode_postal_code, check_postal_code, check_snow_removal, reverse_geocode
 from app.email_service import send_welcome_email
 from app.waste_scraper import get_schedule
 
@@ -426,6 +426,78 @@ def status(postal_code: str):
         'streets_affected': streets,
         'message': message
     }), 200
+
+
+@bp.route('/snow-status')
+def snow_status():
+    """
+    Check snow removal status at exact GPS coordinates.
+
+    Query params:
+        lat: float - Latitude (-90 to 90)
+        lon: float - Longitude (-180 to 180)
+
+    Returns:
+        JSON with snow removal status for the location.
+    """
+    # Get query parameters
+    lat_str = request.args.get('lat')
+    lon_str = request.args.get('lon')
+
+    # Validate presence
+    if lat_str is None or lon_str is None:
+        return jsonify({
+            'error': 'Missing required parameters. Both lat and lon are required.'
+        }), 400
+
+    # Validate numeric
+    try:
+        lat = float(lat_str)
+        lon = float(lon_str)
+    except ValueError:
+        return jsonify({
+            'error': 'Invalid coordinates. lat and lon must be numeric values.'
+        }), 400
+
+    # Validate ranges
+    if lat < -90 or lat > 90:
+        return jsonify({
+            'error': 'Invalid latitude. Must be between -90 and 90.'
+        }), 400
+
+    if lon < -180 or lon > 180:
+        return jsonify({
+            'error': 'Invalid longitude. Must be between -180 and 180.'
+        }), 400
+
+    # Check snow removal status
+    try:
+        result = check_snow_removal(lat, lon)
+
+        # Get location name via reverse geocoding
+        location_name = reverse_geocode(lat, lon)
+
+        # Determine if there's an active operation
+        has_operation = result.get('has_operation', False)
+        streets = result.get('streets', [])
+        search_radius = result.get('search_radius', 200)
+
+        message = 'Snow removal in progress - NO PARKING' if has_operation else 'No active snow removal operation'
+
+        return jsonify({
+            'has_operation': has_operation,
+            'location_name': location_name,
+            'streets_affected': streets,
+            'coordinates': {'lat': lat, 'lon': lon},
+            'search_radius_meters': search_radius,
+            'message': message
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error checking snow status at ({lat}, {lon}): {e}")
+        return jsonify({
+            'error': 'Failed to check snow removal status. Please try again.'
+        }), 500
 
 
 @bp.route('/schedule/<postal_code>')
