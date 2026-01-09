@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snow Alert - Quebec City</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 450px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input[type="email"],
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        input[type="email"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        input::placeholder {
+            color: #aaa;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #message {
+            margin-top: 20px;
+            padding: 14px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+            font-size: 14px;
+        }
+
+        #message.success {
+            display: block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+
+        #message.error {
+            display: block;
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+
+        .divider {
+            margin: 30px 0;
+            border: none;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .unsubscribe-section {
+            text-align: center;
+        }
+
+        .unsubscribe-section h3 {
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .unsubscribe-section input {
+            margin-bottom: 10px;
+        }
+
+        .unsubscribe-section button {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .unsubscribe-section button:hover {
+            background: #e0e0e0;
+            box-shadow: none;
+        }
+
+        .info {
+            margin-top: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .info ul {
+            margin-left: 20px;
+            margin-top: 8px;
+        }
+
+        .info li {
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Snow Alert</h1>
+        <p class="subtitle">Quebec City Snow Removal Notifications</p>
+
+        <!-- Subscribe Form -->
+        <form id="subscribeForm">
+            <div class="form-group">
+                <label for="postal_code">Postal Code</label>
+                <input
+                    type="text"
+                    id="postal_code"
+                    name="postal_code"
+                    placeholder="G1R 2K8"
+                    maxlength="7"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    placeholder="you@example.com"
+                    required
+                >
+            </div>
+
+            <button type="submit" id="subscribeBtn">Subscribe to Alerts</button>
+        </form>
+
+        <div id="message"></div>
+
+        <div class="info">
+            <strong>How it works:</strong>
+            <ul>
+                <li>We check for snow removal operations daily at 4:00 PM</li>
+                <li>You'll receive an email only when there's an active operation</li>
+                <li>The email lists affected streets near your postal code</li>
+            </ul>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Unsubscribe Section -->
+        <div class="unsubscribe-section">
+            <h3>Already subscribed? Unsubscribe here:</h3>
+            <form id="unsubscribeForm">
+                <input
+                    type="email"
+                    id="unsub_email"
+                    name="email"
+                    placeholder="you@example.com"
+                    required
+                >
+                <button type="submit">Unsubscribe</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Subscribe form handler
+        document.getElementById('subscribeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const btn = document.getElementById('subscribeBtn');
+            const msg = document.getElementById('message');
+
+            btn.disabled = true;
+            btn.textContent = 'Subscribing...';
+            msg.className = '';
+            msg.style.display = 'none';
+
+            const data = {
+                postal_code: document.getElementById('postal_code').value,
+                email: document.getElementById('email').value
+            };
+
+            try {
+                const response = await fetch('/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    msg.textContent = result.message;
+                    msg.className = 'success';
+                    document.getElementById('subscribeForm').reset();
+                } else {
+                    msg.textContent = result.error;
+                    msg.className = 'error';
+                }
+            } catch (error) {
+                msg.textContent = 'Network error. Please try again.';
+                msg.className = 'error';
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Subscribe to Alerts';
+        });
+
+        // Unsubscribe form handler
+        document.getElementById('unsubscribeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const msg = document.getElementById('message');
+            msg.className = '';
+            msg.style.display = 'none';
+
+            const data = {
+                email: document.getElementById('unsub_email').value
+            };
+
+            try {
+                const response = await fetch('/unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    msg.textContent = result.message;
+                    msg.className = 'success';
+                    document.getElementById('unsubscribeForm').reset();
+                } else {
+                    msg.textContent = result.error;
+                    msg.className = 'error';
+                }
+            } catch (error) {
+                msg.textContent = 'Network error. Please try again.';
+                msg.className = 'error';
+            }
+        });
+
+        // Auto-format postal code
+        document.getElementById('postal_code').addEventListener('input', (e) => {
+            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (value.length > 3) {
+                value = value.slice(0, 3) + ' ' + value.slice(3);
+            }
+            e.target.value = value;
+        });
+    </script>
+</body>
+</html>
