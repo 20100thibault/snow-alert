@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snow Alert - Quebec City</title>
+    <title>Quebec City Alerts</title>
     <style>
         :root {
             --text-primary: #1d1d1f;
@@ -16,7 +16,11 @@
             --accent: #0071e3;
             --accent-hover: #0077ed;
             --success: #34c759;
+            --success-dark: #248a3d;
             --error: #ff3b30;
+            --snow-color: #5ac8fa;
+            --garbage-color: #34c759;
+            --recycling-color: #0071e3;
             --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
             --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
             --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
@@ -45,31 +49,26 @@
 
         /* Hero Section */
         .hero {
-            background: linear-gradient(180deg, #e8f4fd 0%, var(--bg-primary) 100%);
+            background: linear-gradient(180deg, #e3f2fd 0%, #e8f5e9 50%, var(--bg-primary) 100%);
             padding: 80px 24px 60px;
             text-align: center;
         }
 
         .hero-icon {
-            width: 80px;
-            height: 80px;
+            width: 88px;
+            height: 88px;
             margin: 0 auto 24px;
             background: linear-gradient(145deg, #ffffff 0%, #f0f5ff 100%);
-            border-radius: 22px;
+            border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: var(--shadow-md);
-        }
-
-        .hero-icon svg {
-            width: 44px;
-            height: 44px;
-            color: var(--accent);
+            font-size: 44px;
         }
 
         .hero h1 {
-            font-size: 48px;
+            font-size: 44px;
             font-weight: 600;
             letter-spacing: -0.02em;
             margin-bottom: 12px;
@@ -80,19 +79,19 @@
         }
 
         .hero p {
-            font-size: 21px;
+            font-size: 19px;
             color: var(--text-secondary);
             font-weight: 400;
-            max-width: 400px;
+            max-width: 440px;
             margin: 0 auto;
-            line-height: 1.4;
+            line-height: 1.5;
         }
 
         /* Main Content */
         .main {
             flex: 1;
             padding: 0 24px 80px;
-            max-width: 480px;
+            max-width: 540px;
             margin: 0 auto;
             width: 100%;
         }
@@ -113,10 +112,6 @@
         /* Form Elements */
         .form-group {
             margin-bottom: 20px;
-        }
-
-        .form-group:last-of-type {
-            margin-bottom: 24px;
         }
 
         label {
@@ -157,6 +152,154 @@
 
         input::placeholder {
             color: var(--text-secondary);
+        }
+
+        /* Alert Type Cards */
+        .alert-types {
+            margin-bottom: 24px;
+        }
+
+        .alert-types-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .alert-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .alert-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .alert-card:hover {
+            background: #eeeeef;
+        }
+
+        .alert-card.selected {
+            background: var(--bg-elevated);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+        }
+
+        .alert-card.selected.snow {
+            border-color: var(--snow-color);
+            box-shadow: 0 0 0 3px rgba(90, 200, 250, 0.15);
+        }
+
+        .alert-card.selected.garbage {
+            border-color: var(--garbage-color);
+            box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.15);
+        }
+
+        .alert-card.selected.recycling {
+            border-color: var(--recycling-color);
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+        }
+
+        .alert-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .alert-card.snow .alert-card-icon {
+            background: rgba(90, 200, 250, 0.15);
+        }
+
+        .alert-card.garbage .alert-card-icon {
+            background: rgba(52, 199, 89, 0.15);
+        }
+
+        .alert-card.recycling .alert-card-icon {
+            background: rgba(0, 113, 227, 0.15);
+        }
+
+        .alert-card-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .alert-card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .alert-card-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .alert-card-toggle {
+            width: 50px;
+            height: 30px;
+            background: #e5e5ea;
+            border-radius: 15px;
+            position: relative;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .alert-card-toggle::after {
+            content: '';
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .alert-card.selected .alert-card-toggle {
+            background: var(--accent);
+        }
+
+        .alert-card.selected.snow .alert-card-toggle {
+            background: var(--snow-color);
+        }
+
+        .alert-card.selected.garbage .alert-card-toggle {
+            background: var(--garbage-color);
+        }
+
+        .alert-card.selected.recycling .alert-card-toggle {
+            background: var(--recycling-color);
+        }
+
+        .alert-card.selected .alert-card-toggle::after {
+            left: 22px;
+        }
+
+        .alert-card input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
         }
 
         /* Buttons */
@@ -205,13 +348,23 @@
             background: #ececee;
         }
 
+        .btn-text {
+            background: none;
+            color: var(--accent);
+            padding: 12px;
+        }
+
+        .btn-text:hover {
+            background: rgba(0, 113, 227, 0.05);
+        }
+
         .btn svg {
             width: 20px;
             height: 20px;
         }
 
         /* Message */
-        #message {
+        .message {
             margin-top: 20px;
             padding: 16px;
             border-radius: 12px;
@@ -227,16 +380,76 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        #message.success {
+        .message.success {
             display: block;
             background: rgba(52, 199, 89, 0.1);
             color: #248a3d;
         }
 
-        #message.error {
+        .message.error {
             display: block;
             background: rgba(255, 59, 48, 0.1);
             color: #d70015;
+        }
+
+        /* Schedule Section */
+        .schedule-section {
+            display: none;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .schedule-section.visible {
+            display: block;
+        }
+
+        .schedule-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .schedule-items {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .schedule-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .schedule-item-icon {
+            font-size: 20px;
+            width: 28px;
+            text-align: center;
+        }
+
+        .schedule-item-content {
+            flex: 1;
+        }
+
+        .schedule-item-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .schedule-item-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
         /* Info Section */
@@ -284,7 +497,7 @@
             margin-top: 2px;
         }
 
-        /* Unsubscribe Card */
+        /* Secondary Card */
         .card-secondary {
             background: var(--bg-secondary);
             border: none;
@@ -302,6 +515,33 @@
         .card-secondary input {
             background: var(--bg-elevated);
             margin-bottom: 12px;
+        }
+
+        /* Manage Preferences */
+        .manage-section {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .manage-section.visible {
+            display: block;
+        }
+
+        .manage-form {
+            display: flex;
+            gap: 12px;
+        }
+
+        .manage-form input {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .manage-form .btn {
+            width: auto;
+            padding: 16px 20px;
         }
 
         /* Footer */
@@ -322,17 +562,17 @@
         }
 
         /* Responsive */
-        @media (max-width: 480px) {
+        @media (max-width: 540px) {
             .hero {
                 padding: 60px 20px 40px;
             }
 
             .hero h1 {
-                font-size: 36px;
+                font-size: 32px;
             }
 
             .hero p {
-                font-size: 18px;
+                font-size: 17px;
             }
 
             .main {
@@ -343,11 +583,53 @@
                 padding: 24px;
                 border-radius: 16px;
             }
+
+            .alert-card {
+                padding: 14px;
+                gap: 12px;
+            }
+
+            .alert-card-icon {
+                width: 42px;
+                height: 42px;
+                font-size: 20px;
+            }
+
+            .alert-card-title {
+                font-size: 15px;
+            }
+
+            .alert-card-desc {
+                font-size: 13px;
+            }
+
+            .alert-card-toggle {
+                width: 44px;
+                height: 26px;
+            }
+
+            .alert-card-toggle::after {
+                width: 22px;
+                height: 22px;
+            }
+
+            .alert-card.selected .alert-card-toggle::after {
+                left: 20px;
+            }
+
+            .manage-form {
+                flex-direction: column;
+            }
+
+            .manage-form .btn {
+                width: 100%;
+            }
         }
 
         /* Loading animation */
         .btn-loading {
             position: relative;
+            color: transparent !important;
         }
 
         .btn-loading::after {
@@ -355,14 +637,19 @@
             position: absolute;
             width: 20px;
             height: 20px;
-            border: 2px solid transparent;
-            border-top-color: currentColor;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+
+        /* Hidden utility */
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
@@ -371,18 +658,10 @@
         <!-- Hero -->
         <header class="hero">
             <div class="hero-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>
-                    <line x1="8" y1="16" x2="8.01" y2="16"/>
-                    <line x1="8" y1="20" x2="8.01" y2="20"/>
-                    <line x1="12" y1="18" x2="12.01" y2="18"/>
-                    <line x1="12" y1="22" x2="12.01" y2="22"/>
-                    <line x1="16" y1="16" x2="16.01" y2="16"/>
-                    <line x1="16" y1="20" x2="16.01" y2="20"/>
-                </svg>
+                <span>🏙️</span>
             </div>
-            <h1>Snow Alert</h1>
-            <p>Get notified when snow removal is scheduled for your street in Quebec City.</p>
+            <h1>Quebec City Alerts</h1>
+            <p>Get notified about snow removal and waste collection for your address in Quebec City.</p>
         </header>
 
         <!-- Main Content -->
@@ -415,6 +694,45 @@
                         >
                     </div>
 
+                    <!-- Alert Type Selection -->
+                    <div class="alert-types">
+                        <span class="alert-types-label">Choose Your Alerts</span>
+                        <div class="alert-cards">
+                            <!-- Snow Alert Card -->
+                            <label class="alert-card snow selected">
+                                <input type="checkbox" id="snow_alerts" name="snow_alerts" checked>
+                                <div class="alert-card-icon">❄️</div>
+                                <div class="alert-card-content">
+                                    <div class="alert-card-title">Snow Removal</div>
+                                    <div class="alert-card-desc">Daily alert at 4 PM when street snow removal is scheduled</div>
+                                </div>
+                                <div class="alert-card-toggle"></div>
+                            </label>
+
+                            <!-- Garbage Alert Card -->
+                            <label class="alert-card garbage">
+                                <input type="checkbox" id="garbage_alerts" name="garbage_alerts">
+                                <div class="alert-card-icon">🗑️</div>
+                                <div class="alert-card-content">
+                                    <div class="alert-card-title">Garbage Collection</div>
+                                    <div class="alert-card-desc">Day-before reminder at 6 PM for garbage pickup</div>
+                                </div>
+                                <div class="alert-card-toggle"></div>
+                            </label>
+
+                            <!-- Recycling Alert Card -->
+                            <label class="alert-card recycling">
+                                <input type="checkbox" id="recycling_alerts" name="recycling_alerts">
+                                <div class="alert-card-icon">♻️</div>
+                                <div class="alert-card-content">
+                                    <div class="alert-card-title">Recycling Collection</div>
+                                    <div class="alert-card-desc">Day-before reminder at 6 PM for recycling pickup</div>
+                                </div>
+                                <div class="alert-card-toggle"></div>
+                            </label>
+                        </div>
+                    </div>
+
                     <button type="submit" id="subscribeBtn" class="btn btn-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -424,7 +742,17 @@
                     </button>
                 </form>
 
-                <div id="message"></div>
+                <div id="message" class="message"></div>
+
+                <!-- Schedule Section (shown after subscription) -->
+                <div id="scheduleSection" class="schedule-section">
+                    <div class="schedule-title">
+                        <span>📅</span> Your Next Events
+                    </div>
+                    <div id="scheduleItems" class="schedule-items">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
 
                 <div class="info-section">
                     <div class="info-title">
@@ -440,27 +768,27 @@
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            We check for snow removal operations daily at 4:00 PM
+                            Snow removal alerts are sent daily at 4:00 PM when operations are scheduled
                         </li>
                         <li>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            You'll only receive an email when there's an active operation
+                            Waste collection reminders are sent the day before at 6:00 PM
                         </li>
                         <li>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            The email lists all affected streets near your location
+                            You can update your preferences anytime or unsubscribe below
                         </li>
                     </ul>
                 </div>
             </div>
 
-            <!-- Unsubscribe Card -->
+            <!-- Unsubscribe / Manage Card -->
             <div class="card card-secondary">
-                <h3>Already subscribed? Unsubscribe below.</h3>
+                <h3>Already subscribed?</h3>
                 <form id="unsubscribeForm">
                     <input
                         type="email"
@@ -470,8 +798,23 @@
                         autocomplete="email"
                         required
                     >
-                    <button type="submit" class="btn btn-secondary">Unsubscribe</button>
+                    <button type="submit" class="btn btn-secondary">Unsubscribe from All Alerts</button>
                 </form>
+                <button type="button" id="manageBtn" class="btn btn-text">Manage Preferences Instead</button>
+
+                <div id="manageSection" class="manage-section">
+                    <form id="manageForm" class="manage-form">
+                        <input
+                            type="email"
+                            id="manage_email"
+                            name="email"
+                            placeholder="Enter your email"
+                            autocomplete="email"
+                            required
+                        >
+                        <button type="submit" class="btn btn-secondary">Look Up</button>
+                    </form>
+                </div>
             </div>
         </main>
 
@@ -482,22 +825,116 @@
     </div>
 
     <script>
+        // Toggle alert card selection
+        document.querySelectorAll('.alert-card input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const card = e.target.closest('.alert-card');
+                if (e.target.checked) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
+        });
+
+        // Validate at least one checkbox is selected
+        function validateCheckboxes() {
+            const checkboxes = document.querySelectorAll('.alert-card input[type="checkbox"]');
+            return Array.from(checkboxes).some(cb => cb.checked);
+        }
+
+        // Format date for display
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Not available';
+            const date = new Date(dateStr + 'T00:00:00');
+            const options = { weekday: 'long', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        // Display schedule section
+        function showSchedule(data) {
+            const section = document.getElementById('scheduleSection');
+            const items = document.getElementById('scheduleItems');
+            items.innerHTML = '';
+
+            const nextEvents = data.next_events || {};
+            const preferences = data.preferences || {};
+
+            // Snow removal
+            if (preferences.snow_alerts) {
+                const snowItem = document.createElement('div');
+                snowItem.className = 'schedule-item';
+                snowItem.innerHTML = `
+                    <div class="schedule-item-icon">❄️</div>
+                    <div class="schedule-item-content">
+                        <div class="schedule-item-label">Snow Removal</div>
+                        <div class="schedule-item-value">${nextEvents.snow_removal ? 'Active monitoring' : 'Checked daily at 4 PM'}</div>
+                    </div>
+                `;
+                items.appendChild(snowItem);
+            }
+
+            // Garbage
+            if (preferences.garbage_alerts && nextEvents.garbage) {
+                const garbageItem = document.createElement('div');
+                garbageItem.className = 'schedule-item';
+                garbageItem.innerHTML = `
+                    <div class="schedule-item-icon">🗑️</div>
+                    <div class="schedule-item-content">
+                        <div class="schedule-item-label">Next Garbage Pickup</div>
+                        <div class="schedule-item-value">${formatDate(nextEvents.garbage)}</div>
+                    </div>
+                `;
+                items.appendChild(garbageItem);
+            }
+
+            // Recycling
+            if (preferences.recycling_alerts && nextEvents.recycling) {
+                const recyclingItem = document.createElement('div');
+                recyclingItem.className = 'schedule-item';
+                recyclingItem.innerHTML = `
+                    <div class="schedule-item-icon">♻️</div>
+                    <div class="schedule-item-content">
+                        <div class="schedule-item-label">Next Recycling Pickup</div>
+                        <div class="schedule-item-value">${formatDate(nextEvents.recycling)}</div>
+                    </div>
+                `;
+                items.appendChild(recyclingItem);
+            }
+
+            if (items.children.length > 0) {
+                section.classList.add('visible');
+            }
+        }
+
         // Subscribe form handler
         document.getElementById('subscribeForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const btn = document.getElementById('subscribeBtn');
             const msg = document.getElementById('message');
-            const originalContent = btn.innerHTML;
+            const scheduleSection = document.getElementById('scheduleSection');
+
+            // Validate checkboxes
+            if (!validateCheckboxes()) {
+                msg.textContent = 'Please select at least one alert type.';
+                msg.className = 'message error';
+                return;
+            }
 
             btn.disabled = true;
-            btn.innerHTML = '<span>Subscribing...</span>';
-            msg.className = '';
-            msg.style.display = 'none';
+            btn.classList.add('btn-loading');
+            msg.className = 'message';
+            scheduleSection.classList.remove('visible');
 
             const data = {
                 postal_code: document.getElementById('postal_code').value,
-                email: document.getElementById('email').value
+                email: document.getElementById('email').value,
+                preferences: {
+                    snow_alerts: document.getElementById('snow_alerts').checked,
+                    garbage_alerts: document.getElementById('garbage_alerts').checked,
+                    recycling_alerts: document.getElementById('recycling_alerts').checked
+                }
             };
 
             try {
@@ -511,19 +948,26 @@
 
                 if (response.ok) {
                     msg.textContent = result.message;
-                    msg.className = 'success';
-                    document.getElementById('subscribeForm').reset();
+                    msg.className = 'message success';
+
+                    // Show schedule if available
+                    if (result.next_events) {
+                        showSchedule({
+                            next_events: result.next_events,
+                            preferences: data.preferences
+                        });
+                    }
                 } else {
                     msg.textContent = result.error;
-                    msg.className = 'error';
+                    msg.className = 'message error';
                 }
             } catch (error) {
                 msg.textContent = 'Network error. Please try again.';
-                msg.className = 'error';
+                msg.className = 'message error';
             }
 
             btn.disabled = false;
-            btn.innerHTML = originalContent;
+            btn.classList.remove('btn-loading');
         });
 
         // Unsubscribe form handler
@@ -531,8 +975,7 @@
             e.preventDefault();
 
             const msg = document.getElementById('message');
-            msg.className = '';
-            msg.style.display = 'none';
+            msg.className = 'message';
 
             const data = {
                 email: document.getElementById('unsub_email').value
@@ -549,15 +992,76 @@
 
                 if (response.ok) {
                     msg.textContent = result.message;
-                    msg.className = 'success';
+                    msg.className = 'message success';
                     document.getElementById('unsubscribeForm').reset();
+                    document.getElementById('scheduleSection').classList.remove('visible');
                 } else {
                     msg.textContent = result.error;
-                    msg.className = 'error';
+                    msg.className = 'message error';
                 }
             } catch (error) {
                 msg.textContent = 'Network error. Please try again.';
-                msg.className = 'error';
+                msg.className = 'message error';
+            }
+        });
+
+        // Manage preferences toggle
+        document.getElementById('manageBtn').addEventListener('click', () => {
+            const section = document.getElementById('manageSection');
+            section.classList.toggle('visible');
+        });
+
+        // Manage form - look up preferences
+        document.getElementById('manageForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const msg = document.getElementById('message');
+            const email = document.getElementById('manage_email').value;
+
+            try {
+                const response = await fetch(`/subscriber/${encodeURIComponent(email)}`);
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Populate form with current preferences
+                    document.getElementById('postal_code').value = result.postal_code || '';
+                    document.getElementById('email').value = result.email || '';
+
+                    // Set checkboxes
+                    const snowCb = document.getElementById('snow_alerts');
+                    const garbageCb = document.getElementById('garbage_alerts');
+                    const recyclingCb = document.getElementById('recycling_alerts');
+
+                    snowCb.checked = result.preferences?.snow_alerts || false;
+                    garbageCb.checked = result.preferences?.garbage_alerts || false;
+                    recyclingCb.checked = result.preferences?.recycling_alerts || false;
+
+                    // Update card visuals
+                    snowCb.closest('.alert-card').classList.toggle('selected', snowCb.checked);
+                    garbageCb.closest('.alert-card').classList.toggle('selected', garbageCb.checked);
+                    recyclingCb.closest('.alert-card').classList.toggle('selected', recyclingCb.checked);
+
+                    // Show schedule
+                    if (result.next_events) {
+                        showSchedule(result);
+                    }
+
+                    msg.textContent = 'Preferences loaded. Update and click Subscribe to save changes.';
+                    msg.className = 'message success';
+
+                    // Scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                    // Hide manage section
+                    document.getElementById('manageSection').classList.remove('visible');
+                    document.getElementById('manageForm').reset();
+                } else {
+                    msg.textContent = result.error || 'Email not found.';
+                    msg.className = 'message error';
+                }
+            } catch (error) {
+                msg.textContent = 'Network error. Please try again.';
+                msg.className = 'message error';
             }
         });
 

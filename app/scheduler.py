@@ -22,7 +22,7 @@ def check_all_users():
     Check snow removal status for all active users and send alerts if needed.
     This is the main scheduled job that runs daily.
     """
-    from app.database import get_all_active_users
+    from app.database import get_users_with_snow_alerts
     from app.snow_checker import check_postal_code
     from app.email_service import send_alert_email
 
@@ -30,8 +30,8 @@ def check_all_users():
     logger.info(f"Starting scheduled check at {datetime.now()}")
     logger.info("=" * 50)
 
-    users = get_all_active_users()
-    logger.info(f"Found {len(users)} active users to check")
+    users = get_users_with_snow_alerts()
+    logger.info(f"Found {len(users)} users with snow alerts enabled")
 
     alerts_sent = 0
     errors = 0
@@ -69,6 +69,28 @@ def check_all_users():
     }
 
 
+def check_waste_reminders():
+    """
+    Process waste collection reminders for all users.
+    This is the scheduled job that runs daily (default 6pm).
+    """
+    from app.waste_service import process_waste_reminders
+
+    logger.info("=" * 50)
+    logger.info(f"Starting waste reminder check at {datetime.now()}")
+    logger.info("=" * 50)
+
+    result = process_waste_reminders()
+
+    logger.info("=" * 50)
+    logger.info(f"Waste check complete: {result['garbage_sent']} garbage, "
+                f"{result['recycling_sent']} recycling sent, "
+                f"{result['skipped']} skipped, {result['errors']} errors")
+    logger.info("=" * 50)
+
+    return result
+
+
 def init_scheduler(app=None):
     """Initialize and start the background scheduler."""
     global scheduler
@@ -93,8 +115,23 @@ def init_scheduler(app=None):
         replace_existing=True
     )
 
+    # Schedule daily waste reminder check at configured time (default 6pm)
+    waste_trigger = CronTrigger(
+        hour=Config.WASTE_CHECK_HOUR,
+        minute=Config.WASTE_CHECK_MINUTE
+    )
+
+    scheduler.add_job(
+        check_waste_reminders,
+        trigger=waste_trigger,
+        id='daily_waste_check',
+        name='Daily Waste Reminder Check',
+        replace_existing=True
+    )
+
     scheduler.start()
-    logger.info(f"Scheduler started - Daily check at {Config.CHECK_HOUR:02d}:{Config.CHECK_MINUTE:02d}")
+    logger.info(f"Scheduler started - Snow check at {Config.CHECK_HOUR:02d}:{Config.CHECK_MINUTE:02d}, "
+                f"Waste check at {Config.WASTE_CHECK_HOUR:02d}:{Config.WASTE_CHECK_MINUTE:02d}")
 
     return scheduler
 
@@ -122,6 +159,12 @@ def get_scheduled_jobs():
 
 
 def trigger_check_now():
-    """Manually trigger the check (for testing)."""
-    logger.info("Manual trigger requested")
+    """Manually trigger the snow check (for testing)."""
+    logger.info("Manual snow check trigger requested")
     return check_all_users()
+
+
+def trigger_waste_check_now():
+    """Manually trigger the waste reminder check (for testing)."""
+    logger.info("Manual waste check trigger requested")
+    return check_waste_reminders()

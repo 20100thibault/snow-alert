@@ -1,0 +1,1151 @@
+{
+  "project": "Quebec City Alerts - Unified Subscription System",
+  "version": "2.0.0",
+  "description": "Unified alert platform for snow removal and waste collection reminders",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Database & Schema Updates",
+      "description": "Update database schema to support unified subscriptions with preferences",
+      "tasks": [
+        {
+          "id": "1.1",
+          "name": "Add snow_alerts_enabled column to users table",
+          "description": "Add boolean column to track snow alert preference, default TRUE for existing users",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.1",
+            "name": "test_snow_alerts_enabled_column",
+            "file": "tests/test_database.py",
+            "description": "Verify snow_alerts_enabled column exists and defaults correctly",
+            "assertions": [
+              "Column snow_alerts_enabled exists in users table",
+              "Default value is TRUE",
+              "Existing users have snow_alerts_enabled = TRUE after migration"
+            ]
+          }
+        },
+        {
+          "id": "1.2",
+          "name": "Add garbage_alerts_enabled column to users table",
+          "description": "Add boolean column to track garbage alert preference, default FALSE",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.2",
+            "name": "test_garbage_alerts_enabled_column",
+            "file": "tests/test_database.py",
+            "description": "Verify garbage_alerts_enabled column exists and defaults correctly",
+            "assertions": [
+              "Column garbage_alerts_enabled exists in users table",
+              "Default value is FALSE",
+              "Existing users have garbage_alerts_enabled = FALSE after migration"
+            ]
+          }
+        },
+        {
+          "id": "1.3",
+          "name": "Add recycling_alerts_enabled column to users table",
+          "description": "Add boolean column to track recycling alert preference, default FALSE",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.3",
+            "name": "test_recycling_alerts_enabled_column",
+            "file": "tests/test_database.py",
+            "description": "Verify recycling_alerts_enabled column exists and defaults correctly",
+            "assertions": [
+              "Column recycling_alerts_enabled exists in users table",
+              "Default value is FALSE",
+              "Existing users have recycling_alerts_enabled = FALSE after migration"
+            ]
+          }
+        },
+        {
+          "id": "1.4",
+          "name": "Create waste_zones table",
+          "description": "Create table to store waste collection zone schedules",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.4",
+            "name": "test_waste_zones_table_creation",
+            "file": "tests/test_database.py",
+            "description": "Verify waste_zones table is created with correct schema",
+            "assertions": [
+              "Table waste_zones exists after init_db()",
+              "Columns: id, zone_code, garbage_day, recycling_week, created_at, updated_at",
+              "zone_code has UNIQUE constraint",
+              "Can insert and retrieve a waste zone record"
+            ]
+          }
+        },
+        {
+          "id": "1.5",
+          "name": "Add waste_zone_id foreign key to users table",
+          "description": "Link users to their waste collection zone",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.5",
+            "name": "test_waste_zone_id_foreign_key",
+            "file": "tests/test_database.py",
+            "description": "Verify waste_zone_id column and foreign key relationship",
+            "assertions": [
+              "Column waste_zone_id exists in users table",
+              "Can be NULL (for users who haven't subscribed to waste alerts)",
+              "Foreign key relationship to waste_zones works correctly"
+            ]
+          }
+        },
+        {
+          "id": "1.6",
+          "name": "Create reminders_sent table",
+          "description": "Track sent reminders to prevent duplicates across all alert types",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.6",
+            "name": "test_reminders_sent_table_creation",
+            "file": "tests/test_database.py",
+            "description": "Verify reminders_sent table prevents duplicate notifications",
+            "assertions": [
+              "Table reminders_sent exists after init_db()",
+              "Columns: id, user_id, reminder_type, reference_date, sent_at",
+              "UNIQUE constraint on (user_id, reminder_type, reference_date)",
+              "reminder_type accepts 'snow', 'garbage', 'recycling'"
+            ]
+          }
+        },
+        {
+          "id": "1.7",
+          "name": "Create database migration script",
+          "description": "Script to migrate existing users table without data loss",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.7",
+            "name": "test_database_migration",
+            "file": "tests/test_database.py",
+            "description": "Verify migration preserves existing user data",
+            "assertions": [
+              "Existing users retain email, postal_code, lat, lon",
+              "Existing users get snow_alerts_enabled = TRUE",
+              "Existing users get garbage_alerts_enabled = FALSE",
+              "Existing users get recycling_alerts_enabled = FALSE",
+              "No data loss during migration"
+            ]
+          }
+        },
+        {
+          "id": "1.8",
+          "name": "Create add_waste_zone database function",
+          "description": "Function to add or update waste zone schedule",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.8",
+            "name": "test_add_waste_zone_function",
+            "file": "tests/test_database.py",
+            "description": "Verify add_waste_zone creates and updates zones correctly",
+            "assertions": [
+              "Creates new zone if zone_code doesn't exist",
+              "Updates existing zone if zone_code exists",
+              "Returns zone id on success",
+              "Sets updated_at timestamp on update"
+            ]
+          }
+        },
+        {
+          "id": "1.9",
+          "name": "Create get_waste_zone database function",
+          "description": "Function to retrieve waste zone by zone_code",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.9",
+            "name": "test_get_waste_zone_function",
+            "file": "tests/test_database.py",
+            "description": "Verify get_waste_zone retrieves correct data",
+            "assertions": [
+              "Returns zone dict with all fields for existing zone",
+              "Returns None for non-existent zone_code",
+              "Returns correct garbage_day and recycling_week"
+            ]
+          }
+        },
+        {
+          "id": "1.10",
+          "name": "Create update_user_preferences database function",
+          "description": "Function to update user alert preferences",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.10",
+            "name": "test_update_user_preferences_function",
+            "file": "tests/test_database.py",
+            "description": "Verify update_user_preferences updates correctly",
+            "assertions": [
+              "Updates snow_alerts_enabled when provided",
+              "Updates garbage_alerts_enabled when provided",
+              "Updates recycling_alerts_enabled when provided",
+              "Updates waste_zone_id when provided",
+              "Returns True on success, False if user not found"
+            ]
+          }
+        },
+        {
+          "id": "1.11",
+          "name": "Create record_reminder_sent database function",
+          "description": "Function to record that a reminder was sent",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.11",
+            "name": "test_record_reminder_sent_function",
+            "file": "tests/test_database.py",
+            "description": "Verify record_reminder_sent works correctly",
+            "assertions": [
+              "Creates record for new reminder",
+              "Raises IntegrityError for duplicate reminder",
+              "Records correct reminder_type and reference_date"
+            ]
+          }
+        },
+        {
+          "id": "1.12",
+          "name": "Create was_reminder_sent database function",
+          "description": "Function to check if a reminder was already sent",
+          "file": "app/database.py",
+          "test": {
+            "id": "test-1.12",
+            "name": "test_was_reminder_sent_function",
+            "file": "tests/test_database.py",
+            "description": "Verify was_reminder_sent checks correctly",
+            "assertions": [
+              "Returns True if reminder was already sent",
+              "Returns False if reminder was not sent",
+              "Checks correct combination of user_id, type, and date"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Waste Scraper",
+      "description": "Implement web scraper for Info-Collecte website",
+      "tasks": [
+        {
+          "id": "2.1",
+          "name": "Create waste_scraper.py module",
+          "description": "Create new module with function stubs for scraping",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.1",
+            "name": "test_waste_scraper_module_exists",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify waste_scraper module structure",
+            "assertions": [
+              "Module imports without error",
+              "Function scrape_schedule(postal_code) exists",
+              "Function parse_schedule_html(html) exists",
+              "Function get_cached_schedule(postal_code) exists"
+            ]
+          }
+        },
+        {
+          "id": "2.2",
+          "name": "Implement HTTP request to Info-Collecte",
+          "description": "POST request with postal code to get schedule HTML",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.2",
+            "name": "test_infocollecte_http_request",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify HTTP request is formed correctly (use mocking)",
+            "assertions": [
+              "Makes POST request to correct URL",
+              "Includes required form fields (ASP.NET viewstate, postal code)",
+              "Sets appropriate headers",
+              "Handles 200 response correctly",
+              "Handles non-200 response gracefully"
+            ]
+          }
+        },
+        {
+          "id": "2.3",
+          "name": "Implement HTML parser for schedule data",
+          "description": "Parse HTML response to extract garbage day and recycling week",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.3",
+            "name": "test_html_schedule_parsing",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify HTML parsing extracts correct data (use sample HTML)",
+            "assertions": [
+              "Extracts garbage_day (e.g., 'monday', 'tuesday')",
+              "Extracts recycling_week (e.g., 'odd', 'even')",
+              "Handles missing schedule data gracefully",
+              "Handles malformed HTML without crashing",
+              "Returns None values when data not found"
+            ]
+          }
+        },
+        {
+          "id": "2.4",
+          "name": "Implement rate limiting",
+          "description": "Ensure minimum 10 seconds between requests to Info-Collecte",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.4",
+            "name": "test_scraper_rate_limiting",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify rate limiting is enforced",
+            "assertions": [
+              "First request executes immediately",
+              "Second request within 10 seconds is delayed",
+              "Rate limit is global across all function calls",
+              "Delay is at least 10 seconds"
+            ]
+          }
+        },
+        {
+          "id": "2.5",
+          "name": "Implement schedule caching",
+          "description": "Cache scraped schedules in waste_zones table",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.5",
+            "name": "test_schedule_caching",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify caching works correctly",
+            "assertions": [
+              "First call for postal code scrapes and caches",
+              "Second call within 24 hours returns cached data",
+              "Cache key is based on normalized postal code",
+              "Cache stores garbage_day and recycling_week"
+            ]
+          }
+        },
+        {
+          "id": "2.6",
+          "name": "Implement cache expiration check",
+          "description": "Check if cached schedule is older than 24 hours",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.6",
+            "name": "test_cache_expiration",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify cache expiration works correctly",
+            "assertions": [
+              "Returns cached data if updated_at < 24 hours ago",
+              "Triggers new scrape if updated_at > 24 hours ago",
+              "Updates cache after successful scrape"
+            ]
+          }
+        },
+        {
+          "id": "2.7",
+          "name": "Implement scraper error handling",
+          "description": "Handle network errors, timeouts, and parsing failures",
+          "file": "app/waste_scraper.py",
+          "test": {
+            "id": "test-2.7",
+            "name": "test_scraper_error_handling",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify error handling is robust",
+            "assertions": [
+              "Handles requests.Timeout gracefully",
+              "Handles requests.ConnectionError gracefully",
+              "Handles parsing errors gracefully",
+              "Returns cached data on scrape failure if available",
+              "Logs errors for debugging"
+            ]
+          }
+        },
+        {
+          "id": "2.8",
+          "name": "Add beautifulsoup4 to requirements.txt",
+          "description": "Add HTML parsing dependency",
+          "file": "requirements.txt",
+          "test": {
+            "id": "test-2.8",
+            "name": "test_beautifulsoup_dependency",
+            "file": "tests/test_setup.py",
+            "description": "Verify beautifulsoup4 is installable and importable",
+            "assertions": [
+              "beautifulsoup4 is in requirements.txt",
+              "pip install -r requirements.txt succeeds",
+              "from bs4 import BeautifulSoup works"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "Unified Subscription API",
+      "description": "Update API endpoints for unified subscription with preferences",
+      "tasks": [
+        {
+          "id": "3.1",
+          "name": "Update /subscribe endpoint to accept preferences",
+          "description": "Modify subscribe to accept snow_alerts, garbage_alerts, recycling_alerts",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.1",
+            "name": "test_subscribe_with_preferences",
+            "file": "tests/test_routes.py",
+            "description": "Verify /subscribe accepts and stores preferences",
+            "assertions": [
+              "Accepts preferences object in JSON body",
+              "Stores snow_alerts_enabled correctly",
+              "Stores garbage_alerts_enabled correctly",
+              "Stores recycling_alerts_enabled correctly",
+              "Defaults to snow=true, garbage=false, recycling=false if not provided"
+            ]
+          }
+        },
+        {
+          "id": "3.2",
+          "name": "Trigger waste schedule scrape on subscription",
+          "description": "When user enables waste alerts, scrape their schedule",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.2",
+            "name": "test_subscribe_triggers_scrape",
+            "file": "tests/test_routes.py",
+            "description": "Verify waste schedule is scraped when waste alerts enabled",
+            "assertions": [
+              "Scrapes schedule when garbage_alerts=true",
+              "Scrapes schedule when recycling_alerts=true",
+              "Does not scrape when both waste alerts are false",
+              "Links user to waste_zone_id after scrape"
+            ]
+          }
+        },
+        {
+          "id": "3.3",
+          "name": "Return next events in subscribe response",
+          "description": "Include next_events (snow, garbage, recycling) in response",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.3",
+            "name": "test_subscribe_returns_next_events",
+            "file": "tests/test_routes.py",
+            "description": "Verify subscribe response includes next event dates",
+            "assertions": [
+              "Response includes next_events object",
+              "next_events.snow_removal is date or null",
+              "next_events.garbage is date or null",
+              "next_events.recycling is date or null",
+              "Dates are in ISO format (YYYY-MM-DD)"
+            ]
+          }
+        },
+        {
+          "id": "3.4",
+          "name": "Handle existing user re-subscription",
+          "description": "If email exists, update preferences instead of creating duplicate",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.4",
+            "name": "test_subscribe_updates_existing_user",
+            "file": "tests/test_routes.py",
+            "description": "Verify existing user preferences are updated",
+            "assertions": [
+              "Does not create duplicate user record",
+              "Updates preferences for existing email",
+              "Updates postal code if different",
+              "Returns 200 for update, 201 for new subscription"
+            ]
+          }
+        },
+        {
+          "id": "3.5",
+          "name": "Create PUT /preferences endpoint",
+          "description": "Endpoint to update alert preferences without full re-subscription",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.5",
+            "name": "test_preferences_endpoint",
+            "file": "tests/test_routes.py",
+            "description": "Verify /preferences endpoint updates correctly",
+            "assertions": [
+              "Accepts email and preferences in body",
+              "Updates only provided preferences",
+              "Returns 200 on success",
+              "Returns 404 if email not found",
+              "Triggers waste scrape if enabling waste alerts"
+            ]
+          }
+        },
+        {
+          "id": "3.6",
+          "name": "Create GET /status/{email} endpoint",
+          "description": "Endpoint to retrieve user subscription status and preferences",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.6",
+            "name": "test_status_endpoint",
+            "file": "tests/test_routes.py",
+            "description": "Verify /status endpoint returns correct data",
+            "assertions": [
+              "Returns 200 with user data for existing email",
+              "Returns postal_code",
+              "Returns all three alert preferences",
+              "Returns next event dates",
+              "Returns 404 for non-existent email"
+            ]
+          }
+        },
+        {
+          "id": "3.7",
+          "name": "Update /unsubscribe to remove all preferences",
+          "description": "Unsubscribe removes user completely (all alert types)",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.7",
+            "name": "test_unsubscribe_removes_all",
+            "file": "tests/test_routes.py",
+            "description": "Verify /unsubscribe removes user completely",
+            "assertions": [
+              "Removes user record from database",
+              "Removes associated reminders_sent records",
+              "Returns 200 on success",
+              "Returns 404 for non-existent email"
+            ]
+          }
+        },
+        {
+          "id": "3.8",
+          "name": "Create GET /schedule/{postal_code} endpoint",
+          "description": "Get all schedules (snow operations + waste) for a postal code",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.8",
+            "name": "test_schedule_endpoint",
+            "file": "tests/test_routes.py",
+            "description": "Verify /schedule returns comprehensive schedule data",
+            "assertions": [
+              "Returns 200 with schedule data",
+              "Includes snow_removal.has_operation boolean",
+              "Includes snow_removal.streets if operation active",
+              "Includes waste.garbage_day",
+              "Includes waste.recycling_week",
+              "Returns 400 for invalid postal code"
+            ]
+          }
+        },
+        {
+          "id": "3.9",
+          "name": "Validate at least one alert type selected",
+          "description": "Return error if user tries to subscribe with all alerts disabled",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-3.9",
+            "name": "test_subscribe_requires_one_alert",
+            "file": "tests/test_routes.py",
+            "description": "Verify subscription requires at least one alert type",
+            "assertions": [
+              "Returns 400 if all three alerts are false",
+              "Error message explains at least one alert required",
+              "Accepts any single alert enabled"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Waste Reminder System",
+      "description": "Implement waste collection reminder logic and scheduling",
+      "tasks": [
+        {
+          "id": "4.1",
+          "name": "Create waste_service.py module",
+          "description": "Business logic for waste reminder calculations",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.1",
+            "name": "test_waste_service_module_exists",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify waste_service module structure",
+            "assertions": [
+              "Module imports without error",
+              "Function get_week_parity(date) exists",
+              "Function is_garbage_day(zone, date) exists",
+              "Function is_recycling_day(zone, date) exists",
+              "Function get_next_collection_dates(zone) exists"
+            ]
+          }
+        },
+        {
+          "id": "4.2",
+          "name": "Implement week parity calculation",
+          "description": "Determine if a given week is odd or even",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.2",
+            "name": "test_week_parity_calculation",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify week parity is calculated correctly",
+            "assertions": [
+              "Returns 'odd' for odd ISO week numbers",
+              "Returns 'even' for even ISO week numbers",
+              "Handles year boundaries correctly",
+              "Consistent with Quebec City's official schedule"
+            ]
+          }
+        },
+        {
+          "id": "4.3",
+          "name": "Implement garbage day check",
+          "description": "Check if a given date is a garbage collection day",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.3",
+            "name": "test_is_garbage_day",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify garbage day check is correct",
+            "assertions": [
+              "Returns True when weekday matches zone's garbage_day",
+              "Returns False for other weekdays",
+              "Correctly handles winter schedule (every 2 weeks)",
+              "Correctly handles summer schedule (weekly)"
+            ]
+          }
+        },
+        {
+          "id": "4.4",
+          "name": "Implement recycling day check",
+          "description": "Check if a given date is a recycling collection day",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.4",
+            "name": "test_is_recycling_day",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify recycling day check is correct",
+            "assertions": [
+              "Returns True when weekday matches AND week parity matches",
+              "Returns False when weekday matches but wrong week",
+              "Returns False for non-collection weekdays",
+              "Handles bi-weekly alternation correctly"
+            ]
+          }
+        },
+        {
+          "id": "4.5",
+          "name": "Implement next collection date calculator",
+          "description": "Calculate next garbage and recycling dates for a zone",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.5",
+            "name": "test_next_collection_dates",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify next collection dates are calculated correctly",
+            "assertions": [
+              "Returns correct next garbage date",
+              "Returns correct next recycling date",
+              "Dates are always in the future",
+              "Handles end-of-month correctly"
+            ]
+          }
+        },
+        {
+          "id": "4.6",
+          "name": "Create garbage reminder email template",
+          "description": "HTML email template for garbage collection reminders",
+          "file": "app/email_service.py",
+          "test": {
+            "id": "test-4.6",
+            "name": "test_garbage_email_template",
+            "file": "tests/test_email_service.py",
+            "description": "Verify garbage email template is correct",
+            "assertions": [
+              "Subject includes 'Garbage pickup tomorrow'",
+              "Body includes collection date",
+              "Body includes postal code",
+              "Body includes unsubscribe link",
+              "HTML is valid"
+            ]
+          }
+        },
+        {
+          "id": "4.7",
+          "name": "Create recycling reminder email template",
+          "description": "HTML email template for recycling collection reminders",
+          "file": "app/email_service.py",
+          "test": {
+            "id": "test-4.7",
+            "name": "test_recycling_email_template",
+            "file": "tests/test_email_service.py",
+            "description": "Verify recycling email template is correct",
+            "assertions": [
+              "Subject includes 'Recycling pickup tomorrow'",
+              "Body includes collection date",
+              "Body includes postal code",
+              "Body includes unsubscribe link",
+              "HTML is valid"
+            ]
+          }
+        },
+        {
+          "id": "4.8",
+          "name": "Implement send_garbage_reminder function",
+          "description": "Send garbage reminder email to a user",
+          "file": "app/email_service.py",
+          "test": {
+            "id": "test-4.8",
+            "name": "test_send_garbage_reminder",
+            "file": "tests/test_email_service.py",
+            "description": "Verify garbage reminder is sent correctly",
+            "assertions": [
+              "Calls email API with correct recipient",
+              "Uses garbage email template",
+              "Returns True on success",
+              "Returns False on failure"
+            ]
+          }
+        },
+        {
+          "id": "4.9",
+          "name": "Implement send_recycling_reminder function",
+          "description": "Send recycling reminder email to a user",
+          "file": "app/email_service.py",
+          "test": {
+            "id": "test-4.9",
+            "name": "test_send_recycling_reminder",
+            "file": "tests/test_email_service.py",
+            "description": "Verify recycling reminder is sent correctly",
+            "assertions": [
+              "Calls email API with correct recipient",
+              "Uses recycling email template",
+              "Returns True on success",
+              "Returns False on failure"
+            ]
+          }
+        },
+        {
+          "id": "4.10",
+          "name": "Implement process_waste_reminders function",
+          "description": "Main function to process all waste reminders for today",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.10",
+            "name": "test_process_waste_reminders",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify batch reminder processing works correctly",
+            "assertions": [
+              "Processes all users with waste alerts enabled",
+              "Sends garbage reminder if tomorrow is garbage day",
+              "Sends recycling reminder if tomorrow is recycling day",
+              "Respects garbage_alerts_enabled preference",
+              "Respects recycling_alerts_enabled preference",
+              "Records sent reminders in reminders_sent table"
+            ]
+          }
+        },
+        {
+          "id": "4.11",
+          "name": "Implement duplicate reminder prevention",
+          "description": "Check reminders_sent before sending to prevent duplicates",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-4.11",
+            "name": "test_duplicate_prevention",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify duplicate reminders are prevented",
+            "assertions": [
+              "Checks was_reminder_sent before sending",
+              "Does not send if already sent for same date",
+              "Records reminder after successful send",
+              "Different reminder types for same date are allowed"
+            ]
+          }
+        },
+        {
+          "id": "4.12",
+          "name": "Add waste reminder job to scheduler",
+          "description": "Schedule daily job at 6 PM for waste reminders",
+          "file": "app/scheduler.py",
+          "test": {
+            "id": "test-4.12",
+            "name": "test_waste_scheduler_job",
+            "file": "tests/test_scheduler.py",
+            "description": "Verify waste scheduler job is configured correctly",
+            "assertions": [
+              "Job is registered with APScheduler",
+              "Job runs at 18:00 (6 PM) daily",
+              "Job calls process_waste_reminders()",
+              "Job handles errors without crashing scheduler"
+            ]
+          }
+        },
+        {
+          "id": "4.13",
+          "name": "Add WASTE_CHECK_HOUR config variable",
+          "description": "Make waste reminder time configurable via environment",
+          "file": "config.py",
+          "test": {
+            "id": "test-4.13",
+            "name": "test_waste_check_hour_config",
+            "file": "tests/test_config.py",
+            "description": "Verify WASTE_CHECK_HOUR is configurable",
+            "assertions": [
+              "Default value is 18 (6 PM)",
+              "Can be overridden via WASTE_CHECK_HOUR env var",
+              "Scheduler uses configured value"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "name": "UI Overhaul",
+      "description": "Update homepage to unified Quebec City Alerts design",
+      "tasks": [
+        {
+          "id": "5.1",
+          "name": "Update page title and hero section",
+          "description": "Change from 'Snow Alert' to 'Quebec City Alerts'",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.1",
+            "name": "test_updated_branding",
+            "file": "tests/test_templates.py",
+            "description": "Verify branding is updated",
+            "assertions": [
+              "Page title is 'Quebec City Alerts'",
+              "Hero heading is 'Quebec City Alerts'",
+              "Hero subtitle mentions snow and waste collection",
+              "Hero icon reflects multi-purpose nature"
+            ]
+          }
+        },
+        {
+          "id": "5.2",
+          "name": "Create unified subscription form",
+          "description": "Single form with postal code, email, and alert checkboxes",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.2",
+            "name": "test_unified_form_structure",
+            "file": "tests/test_templates.py",
+            "description": "Verify unified form has all required fields",
+            "assertions": [
+              "Form has postal_code input",
+              "Form has email input",
+              "Form has snow_alerts checkbox",
+              "Form has garbage_alerts checkbox",
+              "Form has recycling_alerts checkbox",
+              "Submit button exists"
+            ]
+          }
+        },
+        {
+          "id": "5.3",
+          "name": "Create alert type selection cards",
+          "description": "Styled cards for each alert type with checkbox toggle",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.3",
+            "name": "test_alert_cards_styling",
+            "file": "tests/test_templates.py",
+            "description": "Verify alert cards are styled correctly",
+            "assertions": [
+              "Snow alert card has snowflake icon",
+              "Garbage alert card has trash icon",
+              "Recycling alert card has recycling icon",
+              "Cards have consistent styling",
+              "Checkboxes are styled as toggles"
+            ]
+          }
+        },
+        {
+          "id": "5.4",
+          "name": "Add descriptive text to each alert card",
+          "description": "Add description of what each alert type provides",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.4",
+            "name": "test_alert_card_descriptions",
+            "file": "tests/test_templates.py",
+            "description": "Verify alert cards have descriptions",
+            "assertions": [
+              "Snow card mentions street snow removal",
+              "Garbage card mentions day-before reminder at 6 PM",
+              "Recycling card mentions day-before reminder at 6 PM"
+            ]
+          }
+        },
+        {
+          "id": "5.5",
+          "name": "Implement JavaScript form submission",
+          "description": "Submit unified form via fetch() with preferences",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.5",
+            "name": "test_form_submission_js",
+            "file": "tests/test_frontend.py",
+            "description": "Verify JavaScript form submission works",
+            "assertions": [
+              "Collects postal_code and email",
+              "Collects all three checkbox values",
+              "Sends POST to /subscribe with JSON body",
+              "Shows loading state during submission",
+              "Displays success message on success"
+            ]
+          }
+        },
+        {
+          "id": "5.6",
+          "name": "Validate at least one checkbox selected",
+          "description": "Client-side validation for minimum one alert type",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.6",
+            "name": "test_checkbox_validation_js",
+            "file": "tests/test_frontend.py",
+            "description": "Verify client-side validation works",
+            "assertions": [
+              "Shows error if no checkboxes selected",
+              "Allows submission with any single checkbox",
+              "Error message is user-friendly"
+            ]
+          }
+        },
+        {
+          "id": "5.7",
+          "name": "Display schedule section after subscription",
+          "description": "Show next event dates after successful subscription",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.7",
+            "name": "test_schedule_display",
+            "file": "tests/test_frontend.py",
+            "description": "Verify schedule displays correctly after subscription",
+            "assertions": [
+              "Schedule section is hidden initially",
+              "Schedule section shows after subscription",
+              "Displays next garbage date if enabled",
+              "Displays next recycling date if enabled",
+              "Displays snow removal status"
+            ]
+          }
+        },
+        {
+          "id": "5.8",
+          "name": "Update unsubscribe section",
+          "description": "Simplified unsubscribe that removes all alerts",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.8",
+            "name": "test_unsubscribe_section",
+            "file": "tests/test_frontend.py",
+            "description": "Verify unsubscribe section works",
+            "assertions": [
+              "Unsubscribe form has email input",
+              "Submit calls /unsubscribe endpoint",
+              "Shows success message on success",
+              "Shows error for non-existent email"
+            ]
+          }
+        },
+        {
+          "id": "5.9",
+          "name": "Add manage preferences link",
+          "description": "Link/button to manage existing subscription preferences",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.9",
+            "name": "test_manage_preferences_link",
+            "file": "tests/test_frontend.py",
+            "description": "Verify manage preferences functionality",
+            "assertions": [
+              "Manage preferences button exists",
+              "Clicking shows email input for lookup",
+              "Calls /status endpoint to get current preferences",
+              "Allows updating preferences via /preferences endpoint"
+            ]
+          }
+        },
+        {
+          "id": "5.10",
+          "name": "Update responsive styles",
+          "description": "Ensure new layout works on mobile devices",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-5.10",
+            "name": "test_responsive_layout",
+            "file": "tests/test_templates.py",
+            "description": "Verify responsive design works",
+            "assertions": [
+              "Alert cards stack vertically on mobile",
+              "Form inputs are full width on mobile",
+              "Checkboxes are easily tappable on touch devices",
+              "No horizontal scrolling on mobile"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-6",
+      "name": "Testing & Deployment",
+      "description": "End-to-end testing and deployment configuration",
+      "tasks": [
+        {
+          "id": "6.1",
+          "name": "Create end-to-end subscription test",
+          "description": "Test complete flow from subscription to receiving reminders",
+          "file": "tests/test_e2e.py",
+          "test": {
+            "id": "test-6.1",
+            "name": "test_e2e_subscription_flow",
+            "file": "tests/test_e2e.py",
+            "description": "Verify complete subscription flow works",
+            "assertions": [
+              "User can subscribe with all three alerts enabled",
+              "Schedule is scraped and cached",
+              "User record has correct preferences",
+              "Snow alerts work for enabled users",
+              "Waste reminders work for enabled users"
+            ]
+          }
+        },
+        {
+          "id": "6.2",
+          "name": "Create migration test",
+          "description": "Test that existing users are migrated correctly",
+          "file": "tests/test_migration.py",
+          "test": {
+            "id": "test-6.2",
+            "name": "test_existing_user_migration",
+            "file": "tests/test_migration.py",
+            "description": "Verify existing users are migrated correctly",
+            "assertions": [
+              "Existing users retain all original data",
+              "Existing users have snow_alerts_enabled = TRUE",
+              "Existing users have garbage_alerts_enabled = FALSE",
+              "Existing users have recycling_alerts_enabled = FALSE",
+              "Existing snow alert functionality unchanged"
+            ]
+          }
+        },
+        {
+          "id": "6.3",
+          "name": "Create scraper resilience tests",
+          "description": "Test scraper handles various failure scenarios",
+          "file": "tests/test_waste_scraper.py",
+          "test": {
+            "id": "test-6.3",
+            "name": "test_scraper_resilience",
+            "file": "tests/test_waste_scraper.py",
+            "description": "Verify scraper handles failures gracefully",
+            "assertions": [
+              "Handles network timeout",
+              "Handles 500 server error",
+              "Handles HTML structure changes",
+              "Falls back to cached data on failure",
+              "Logs errors appropriately"
+            ]
+          }
+        },
+        {
+          "id": "6.4",
+          "name": "Update render.yaml with new env vars",
+          "description": "Add WASTE_CHECK_HOUR and WASTE_CHECK_MINUTE",
+          "file": "render.yaml",
+          "test": {
+            "id": "test-6.4",
+            "name": "test_render_yaml_updated",
+            "file": "tests/test_setup.py",
+            "description": "Verify render.yaml has new environment variables",
+            "assertions": [
+              "WASTE_CHECK_HOUR env var defined (default 18)",
+              "WASTE_CHECK_MINUTE env var defined (default 0)",
+              "YAML syntax is valid",
+              "All existing config preserved"
+            ]
+          }
+        },
+        {
+          "id": "6.5",
+          "name": "Add comprehensive logging",
+          "description": "Add logging for waste scraper, reminders, and errors",
+          "file": "app/waste_service.py",
+          "test": {
+            "id": "test-6.5",
+            "name": "test_logging_coverage",
+            "file": "tests/test_waste_service.py",
+            "description": "Verify logging is comprehensive",
+            "assertions": [
+              "Scraping attempts are logged",
+              "Scraping failures are logged with details",
+              "Reminders sent are logged",
+              "Email failures are logged",
+              "Log level is appropriate"
+            ]
+          }
+        },
+        {
+          "id": "6.6",
+          "name": "Create admin trigger endpoints",
+          "description": "Admin endpoints to manually trigger waste checks",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-6.6",
+            "name": "test_admin_waste_trigger",
+            "file": "tests/test_routes.py",
+            "description": "Verify admin trigger endpoint works",
+            "assertions": [
+              "Endpoint exists at /admin/trigger-waste-check",
+              "Triggers process_waste_reminders()",
+              "Returns count of reminders sent",
+              "Can be called multiple times safely"
+            ]
+          }
+        },
+        {
+          "id": "6.7",
+          "name": "Run full test suite",
+          "description": "Ensure all tests pass before deployment",
+          "file": null,
+          "test": {
+            "id": "test-6.7",
+            "name": "test_full_suite",
+            "file": null,
+            "description": "Run pytest and verify all tests pass",
+            "assertions": [
+              "pytest runs without errors",
+              "All existing tests still pass",
+              "All new tests pass",
+              "No deprecation warnings",
+              "Test coverage above 80%"
+            ]
+          }
+        },
+        {
+          "id": "6.8",
+          "name": "Update .env.example with new variables",
+          "description": "Document new environment variables",
+          "file": ".env.example",
+          "test": {
+            "id": "test-6.8",
+            "name": "test_env_example_updated",
+            "file": "tests/test_setup.py",
+            "description": "Verify .env.example documents new variables",
+            "assertions": [
+              "WASTE_CHECK_HOUR is documented",
+              "WASTE_CHECK_MINUTE is documented",
+              "Comments explain each variable"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "total_tasks": 53,
+  "total_tests": 53,
+  "summary": {
+    "phase_1_tasks": 12,
+    "phase_2_tasks": 8,
+    "phase_3_tasks": 9,
+    "phase_4_tasks": 13,
+    "phase_5_tasks": 10,
+    "phase_6_tasks": 8
+  }
+}

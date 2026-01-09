@@ -19,5 +19,9 @@ services:
         value: 16
       - key: CHECK_MINUTE
         value: 0
+      - key: WASTE_CHECK_HOUR
+        value: 18
+      - key: WASTE_CHECK_MINUTE
+        value: 0
       - key: SEARCH_RADIUS_METERS
         value: 200
