@@ -1477,10 +1477,121 @@
           }
         }
       ]
+    },
+    {
+      "id": "phase-9",
+      "name": "Deployment",
+      "description": "Deploy Quick Check feature to production server",
+      "tasks": [
+        {
+          "id": "9.1",
+          "name": "Run full test suite",
+          "description": "Ensure all tests pass before deployment",
+          "file": "tests/",
+          "test": {
+            "id": "test-9.1",
+            "name": "test_all_tests_pass",
+            "file": "tests/",
+            "description": "All tests must pass",
+            "assertions": [
+              "All unit tests pass",
+              "All integration tests pass",
+              "No regressions in existing functionality"
+            ]
+          }
+        },
+        {
+          "id": "9.2",
+          "name": "Push to remote repository",
+          "description": "Push committed changes to origin/main",
+          "file": null,
+          "test": {
+            "id": "test-9.2",
+            "name": "test_push_successful",
+            "file": null,
+            "description": "Git push completes without errors",
+            "assertions": [
+              "Push to origin/main succeeds",
+              "No merge conflicts",
+              "Remote branch updated"
+            ]
+          }
+        },
+        {
+          "id": "9.3",
+          "name": "Deploy to production server",
+          "description": "Pull changes on production server and restart application",
+          "file": null,
+          "test": {
+            "id": "test-9.3",
+            "name": "test_deployment_successful",
+            "file": null,
+            "description": "Application deploys and starts correctly",
+            "assertions": [
+              "Git pull on server succeeds",
+              "Dependencies installed if needed",
+              "Application restarts without errors"
+            ]
+          }
+        },
+        {
+          "id": "9.4",
+          "name": "Verify Quick Check endpoint",
+          "description": "Test /quick-check endpoint on production",
+          "file": null,
+          "test": {
+            "id": "test-9.4",
+            "name": "test_quick_check_production",
+            "file": null,
+            "description": "Quick Check works in production",
+            "assertions": [
+              "GET /quick-check/G1R2K8 returns 200",
+              "Response includes snow_status",
+              "Response includes waste_schedule or waste_schedule_error",
+              "Response includes next_events"
+            ]
+          }
+        },
+        {
+          "id": "9.5",
+          "name": "Verify UI loads correctly",
+          "description": "Test Quick Check UI on production website",
+          "file": null,
+          "test": {
+            "id": "test-9.5",
+            "name": "test_ui_production",
+            "file": null,
+            "description": "UI displays correctly in production",
+            "assertions": [
+              "Quick Check card visible on homepage",
+              "Postal code input works",
+              "Results display after check",
+              "Subscribe CTA scrolls to form"
+            ]
+          }
+        },
+        {
+          "id": "9.6",
+          "name": "Monitor logs for errors",
+          "description": "Check application logs for any errors after deployment",
+          "file": null,
+          "test": {
+            "id": "test-9.6",
+            "name": "test_no_errors_in_logs",
+            "file": null,
+            "description": "No critical errors in logs",
+            "assertions": [
+              "No unhandled exceptions",
+              "No database connection errors",
+              "No scraper timeout errors on valid postal codes"
+            ]
+          }
+        }
+      ]
     }
   ],
-  "total_tasks": 71,
-  "total_tests": 71,
+  "total_tasks": 77,
+  "total_tests": 77,
   "summary": {
     "phase_1_tasks": 12,
     "phase_2_tasks": 8,
@@ -1489,6 +1600,7 @@
     "phase_5_tasks": 10,
     "phase_6_tasks": 8,
     "phase_7_tasks": 10,
-    "phase_8_tasks": 8
+    "phase_8_tasks": 8,
+    "phase_9_tasks": 6
   }
 }
