@@ -339,10 +339,10 @@ SAMPLE_SCHEDULE_HTML_WEDNESDAY_EVEN = '''
 SAMPLE_SCHEDULE_HTML_FRIDAY_ODD = '''
 <html>
 <body>
-<table>
-    <tr><td>Jour de collecte</td><td>Vendredi</td></tr>
-    <tr><td>Recyclage</td><td>Semaines impaires</td></tr>
-</table>
+<div class="schedule">
+    <p>Collecte des ordures: Vendredi</p>
+    <p>Recyclage: Semaines impaires</p>
+</div>
 </body>
 </html>
 '''
@@ -420,7 +420,7 @@ class TestParseScheduleHtml:
     def test_parse_case_insensitive_day(self):
         """Verify day parsing is case insensitive."""
         from app.waste_scraper import parse_schedule_html
-        html = '<html><p>Collecte: JEUDI</p><p>Semaine: PAIRE</p></html>'
+        html = '<html><p>Collecte des ordures: JEUDI</p><p>Semaine PAIRE</p></html>'
         result = parse_schedule_html(html)
         assert result is not None
         assert result['garbage_day'] == 'thursday'
@@ -449,12 +449,12 @@ class TestParseScheduleHtml:
         from app.waste_scraper import parse_schedule_html
 
         # Test odd (impaire)
-        html_odd = '<html><p>Collecte: Lundi</p><p>Semaine impaire</p></html>'
+        html_odd = '<html><p>Collecte des ordures: Lundi</p><p>Semaine impaire</p></html>'
         result_odd = parse_schedule_html(html_odd)
         assert result_odd['recycling_week'] == 'odd'
 
         # Test even (paire)
-        html_even = '<html><p>Collecte: Lundi</p><p>Semaine paire</p></html>'
+        html_even = '<html><p>Collecte des ordures: Lundi</p><p>Semaine paire</p></html>'
         result_even = parse_schedule_html(html_even)
         assert result_even['recycling_week'] == 'even'
 
@@ -463,12 +463,12 @@ class TestParseScheduleHtml:
         from app.waste_scraper import parse_schedule_html
 
         # Test impaires (plural)
-        html_odd = '<html><p>Collecte: Lundi</p><p>Semaines impaires</p></html>'
+        html_odd = '<html><p>Collecte des ordures: Lundi</p><p>Semaines impaires</p></html>'
         result_odd = parse_schedule_html(html_odd)
         assert result_odd['recycling_week'] == 'odd'
 
         # Test paires (plural)
-        html_even = '<html><p>Collecte: Lundi</p><p>Semaines paires</p></html>'
+        html_even = '<html><p>Collecte des ordures: Lundi</p><p>Semaines paires</p></html>'
         result_even = parse_schedule_html(html_even)
         assert result_even['recycling_week'] == 'even'
 
