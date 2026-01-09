@@ -1136,16 +1136,359 @@
           }
         }
       ]
+    },
+    {
+      "id": "phase-7",
+      "name": "Quick Check Feature",
+      "description": "Add a button to instantly check snow status and waste schedule without subscribing",
+      "tasks": [
+        {
+          "id": "7.1",
+          "name": "Create /quick-check/<postal_code> endpoint",
+          "description": "Backend route combining snow status and waste schedule into single response",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-7.1",
+            "name": "test_quick_check_valid_postal_code",
+            "file": "tests/test_routes.py",
+            "description": "Verify quick-check returns combined snow and waste data",
+            "assertions": [
+              "Returns 200 for valid postal code",
+              "Response includes snow_status object with has_operation and streets_affected",
+              "Response includes waste_schedule object with garbage_day and recycling_week",
+              "Response includes next_events with next_garbage and next_recycling dates",
+              "Dates are in ISO format (YYYY-MM-DD)"
+            ]
+          }
+        },
+        {
+          "id": "7.2",
+          "name": "Add test for invalid postal code",
+          "description": "Validate postal code format and return appropriate error",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-7.2",
+            "name": "test_quick_check_invalid_postal_code",
+            "file": "tests/test_routes.py",
+            "description": "Verify quick-check returns 400 for malformed postal codes",
+            "assertions": [
+              "Returns 400 for empty postal code",
+              "Returns 400 for invalid format (e.g., '12345')",
+              "Returns 400 for incomplete postal code",
+              "Error message explains valid postal code format"
+            ]
+          }
+        },
+        {
+          "id": "7.3",
+          "name": "Add test for geocoding failure",
+          "description": "Handle case when postal code cannot be geocoded",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-7.3",
+            "name": "test_quick_check_geocoding_failure",
+            "file": "tests/test_routes.py",
+            "description": "Verify quick-check handles geocoding failures gracefully",
+            "assertions": [
+              "Returns 400 when geocoding fails",
+              "Error message indicates postal code could not be located",
+              "Does not crash on geocoding timeout",
+              "Still returns waste schedule if only geocoding fails"
+            ]
+          }
+        },
+        {
+          "id": "7.4",
+          "name": "Add test for scraping failure",
+          "description": "Handle case when waste schedule cannot be fetched",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-7.4",
+            "name": "test_quick_check_scraping_failure",
+            "file": "tests/test_routes.py",
+            "description": "Verify quick-check handles scraping failures gracefully",
+            "assertions": [
+              "Returns 200 with partial data when scraping fails",
+              "Snow status is still returned if scraping fails",
+              "waste_schedule is null or contains error message",
+              "Does not crash on scraping timeout"
+            ]
+          }
+        },
+        {
+          "id": "7.5",
+          "name": "Add Quick Check button to UI",
+          "description": "Add button in hero section or separate card for quick check",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-7.5",
+            "name": "test_quick_check_button_exists",
+            "file": "tests/test_templates.py",
+            "description": "Verify Quick Check button is present in UI",
+            "assertions": [
+              "Quick Check button exists in the page",
+              "Button has appropriate styling consistent with design",
+              "Button is visible without scrolling on desktop",
+              "Button has accessible label"
+            ]
+          }
+        },
+        {
+          "id": "7.6",
+          "name": "Add Quick Check postal code input",
+          "description": "Postal code input field for quick check (separate from subscribe form)",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-7.6",
+            "name": "test_quick_check_input_field",
+            "file": "tests/test_templates.py",
+            "description": "Verify Quick Check input field exists and works",
+            "assertions": [
+              "Postal code input field exists for quick check",
+              "Input has placeholder text showing expected format",
+              "Input applies auto-formatting (adds space)",
+              "Input validates on blur or submit"
+            ]
+          }
+        },
+        {
+          "id": "7.7",
+          "name": "Add Quick Check results display component",
+          "description": "Card showing snow status and upcoming dates with consistent styling",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-7.7",
+            "name": "test_quick_check_results_display",
+            "file": "tests/test_templates.py",
+            "description": "Verify results display component exists and is styled correctly",
+            "assertions": [
+              "Results card is hidden by default",
+              "Results card appears after successful quick check",
+              "Snow status shows with appropriate icon (active/inactive)",
+              "Next garbage date is displayed with green color coding",
+              "Next recycling date is displayed with blue color coding",
+              "Styling is consistent with existing design system"
+            ]
+          }
+        },
+        {
+          "id": "7.8",
+          "name": "Add JavaScript handler for quick check",
+          "description": "Fetch data from /quick-check endpoint and display results",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-7.8",
+            "name": "test_quick_check_js_handler",
+            "file": "tests/test_frontend.py",
+            "description": "Verify JavaScript handler works correctly",
+            "assertions": [
+              "Clicking button triggers API call to /quick-check/<postal_code>",
+              "Loading state is shown during fetch",
+              "Results are displayed on success",
+              "Error message is shown on failure",
+              "Invalid postal code shows validation error before API call"
+            ]
+          }
+        },
+        {
+          "id": "7.9",
+          "name": "Add Subscribe for alerts CTA after results",
+          "description": "Button/link to convert quick check users to subscribers",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-7.9",
+            "name": "test_subscribe_cta_after_results",
+            "file": "tests/test_templates.py",
+            "description": "Verify CTA appears after quick check results",
+            "assertions": [
+              "CTA button appears below quick check results",
+              "CTA has compelling text (e.g., 'Get notified automatically')",
+              "Clicking CTA scrolls to or shows subscription form",
+              "Postal code is pre-filled in subscription form from quick check"
+            ]
+          }
+        },
+        {
+          "id": "7.10",
+          "name": "Add loading and error states for quick check",
+          "description": "Visual feedback during loading and error handling",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-7.10",
+            "name": "test_quick_check_loading_error_states",
+            "file": "tests/test_frontend.py",
+            "description": "Verify loading and error states work correctly",
+            "assertions": [
+              "Loading spinner appears during API call",
+              "Button is disabled during loading",
+              "Error message appears on API failure",
+              "Error message is styled consistently with existing errors",
+              "User can retry after error"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-8",
+      "name": "Quick Check Waste Schedule Display",
+      "description": "Ensure Quick Check always displays garbage and recycling dates, with proper error handling when schedule cannot be fetched",
+      "tasks": [
+        {
+          "id": "8.1",
+          "name": "Add waste schedule loading indicator to Quick Check",
+          "description": "Show loading state while fetching waste schedule, separate from snow check",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-8.1",
+            "name": "test_quick_check_shows_waste_loading",
+            "file": "tests/test_templates.py",
+            "description": "Verify loading indicator appears for waste schedule",
+            "assertions": [
+              "Loading indicator shown while fetching",
+              "Loading indicator disappears after fetch completes",
+              "Snow status can display before waste schedule loads"
+            ]
+          }
+        },
+        {
+          "id": "8.2",
+          "name": "Display placeholder when waste schedule unavailable",
+          "description": "Show 'Unable to fetch schedule' message instead of hiding garbage/recycling cards",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-8.2",
+            "name": "test_quick_check_shows_waste_unavailable",
+            "file": "tests/test_frontend.py",
+            "description": "Verify placeholder message when waste schedule fails",
+            "assertions": [
+              "Garbage card shows 'Unable to fetch' when schedule unavailable",
+              "Recycling card shows 'Unable to fetch' when schedule unavailable",
+              "Cards are still displayed (not hidden)",
+              "Retry option is available"
+            ]
+          }
+        },
+        {
+          "id": "8.3",
+          "name": "Add waste_schedule_error field to quick-check response",
+          "description": "Return explicit error message when waste scraping fails",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-8.3",
+            "name": "test_quick_check_returns_waste_error",
+            "file": "tests/test_routes.py",
+            "description": "Verify quick-check returns waste_schedule_error on failure",
+            "assertions": [
+              "Returns waste_schedule_error field when scraping fails",
+              "Error message is user-friendly",
+              "Snow status is still returned successfully",
+              "HTTP status is still 200 (partial success)"
+            ]
+          }
+        },
+        {
+          "id": "8.4",
+          "name": "Always display garbage and recycling cards in results",
+          "description": "Show garbage and recycling cards even when dates unavailable, with appropriate messaging",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-8.4",
+            "name": "test_quick_check_always_shows_waste_cards",
+            "file": "tests/test_frontend.py",
+            "description": "Verify garbage and recycling cards always appear",
+            "assertions": [
+              "Garbage card always visible after quick check",
+              "Recycling card always visible after quick check",
+              "Cards show date when available",
+              "Cards show error message when unavailable"
+            ]
+          }
+        },
+        {
+          "id": "8.5",
+          "name": "Add retry button for failed waste schedule fetch",
+          "description": "Allow user to retry fetching waste schedule without re-checking snow",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-8.5",
+            "name": "test_quick_check_retry_waste_fetch",
+            "file": "tests/test_frontend.py",
+            "description": "Verify retry button works for waste schedule",
+            "assertions": [
+              "Retry button appears when waste fetch fails",
+              "Clicking retry fetches waste schedule again",
+              "Snow status is preserved during retry",
+              "Success replaces error message with dates"
+            ]
+          }
+        },
+        {
+          "id": "8.6",
+          "name": "Log waste scraping errors with postal code",
+          "description": "Add detailed logging when waste schedule cannot be fetched for debugging",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-8.6",
+            "name": "test_quick_check_logs_waste_errors",
+            "file": "tests/test_routes.py",
+            "description": "Verify waste errors are logged with context",
+            "assertions": [
+              "Error logged includes postal code",
+              "Error logged includes exception details",
+              "Log level is WARNING or ERROR",
+              "Logs do not expose sensitive information"
+            ]
+          }
+        },
+        {
+          "id": "8.7",
+          "name": "Add timeout handling for waste scraper in quick-check",
+          "description": "Set reasonable timeout for waste scraper to prevent hanging requests",
+          "file": "app/routes.py",
+          "test": {
+            "id": "test-8.7",
+            "name": "test_quick_check_waste_timeout",
+            "file": "tests/test_routes.py",
+            "description": "Verify quick-check handles waste scraper timeout",
+            "assertions": [
+              "Request completes within 15 seconds even if scraper hangs",
+              "Timeout returns partial data with error message",
+              "Snow status returned even on waste timeout",
+              "User sees friendly timeout message"
+            ]
+          }
+        },
+        {
+          "id": "8.8",
+          "name": "Display waste schedule day info even without exact dates",
+          "description": "Show garbage day (e.g., 'Mondays') and recycling week even if next date calculation fails",
+          "file": "templates/index.html",
+          "test": {
+            "id": "test-8.8",
+            "name": "test_quick_check_shows_schedule_info",
+            "file": "tests/test_frontend.py",
+            "description": "Verify schedule day info displayed when available",
+            "assertions": [
+              "Shows garbage day (e.g., 'Every Monday') if available",
+              "Shows recycling week (e.g., 'Odd weeks') if available",
+              "Fallback shown if neither date nor day info available"
+            ]
+          }
+        }
+      ]
     }
   ],
-  "total_tasks": 53,
-  "total_tests": 53,
+  "total_tasks": 71,
+  "total_tests": 71,
   "summary": {
     "phase_1_tasks": 12,
     "phase_2_tasks": 8,
     "phase_3_tasks": 9,
     "phase_4_tasks": 13,
     "phase_5_tasks": 10,
-    "phase_6_tasks": 8
+    "phase_6_tasks": 8,
+    "phase_7_tasks": 10,
+    "phase_8_tasks": 8
   }
 }

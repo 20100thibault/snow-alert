@@ -5,6 +5,7 @@ Flask Routes for Quebec City Alerts
 import re
 import logging
 from datetime import date, timedelta
+from typing import Optional, Dict, Any, Tuple
 from flask import Blueprint, request, jsonify, render_template
 from app.database import (
     add_user, get_user_by_email, remove_user,
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('main', __name__)
 
+# Regex patterns for validation
+EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+POSTAL_CODE_PATTERN = re.compile(r'^[A-Z]\d[A-Z]\d[A-Z]\d$')
 
 # Day name to weekday number mapping (Monday=0, Sunday=6)
 DAY_TO_WEEKDAY = {
@@ -31,11 +35,52 @@ DAY_TO_WEEKDAY = {
 }
 
 
+# ============== Validation Helpers ==============
+
+def is_valid_email(email: str) -> bool:
+    """Validate email format."""
+    return bool(EMAIL_PATTERN.match(email))
+
+
+def is_valid_postal_code(postal_code: str) -> bool:
+    """Validate Canadian postal code format."""
+    normalized = postal_code.upper().replace(' ', '')
+    return bool(POSTAL_CODE_PATTERN.match(normalized))
+
+
+def validate_email_field(email: str) -> Tuple[Optional[str], int]:
+    """Validate email and return error response tuple if invalid, or (None, 0) if valid."""
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+    if not is_valid_email(email):
+        return jsonify({'error': 'Invalid email format'}), 400
+    return None, 0
+
+
+def validate_postal_code_field(postal_code: str) -> Tuple[Optional[str], int]:
+    """Validate postal code and return error response tuple if invalid, or (None, 0) if valid."""
+    if not postal_code:
+        return jsonify({'error': 'Postal code is required'}), 400
+    if not is_valid_postal_code(postal_code):
+        return jsonify({'error': 'Invalid postal code format. Use format like G1R 2K8'}), 400
+    return None, 0
+
+
+def parse_bool_preference(value: Any, default: bool) -> bool:
+    """Parse a boolean preference value from various input types."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ('true', '1', 'yes', 'on')
+    return bool(value)
+
+
+# ============== Date Calculation Helpers ==============
+
 def get_week_parity(d: date) -> str:
-    """
-    Get the parity of the ISO week number for a given date.
-    Returns 'odd' or 'even'.
-    """
+    """Get the parity of the ISO week number for a given date. Returns 'odd' or 'even'."""
     week_number = d.isocalendar()[1]
     return 'odd' if week_number % 2 == 1 else 'even'
 
@@ -46,16 +91,13 @@ def get_next_weekday(from_date: date, target_weekday: int) -> date:
     If from_date is the target weekday, returns the next week's occurrence.
     """
     days_ahead = target_weekday - from_date.weekday()
-    if days_ahead <= 0:  # Target day already happened this week or is today
+    if days_ahead <= 0:
         days_ahead += 7
     return from_date + timedelta(days=days_ahead)
 
 
-def get_next_garbage_date(garbage_day: str, from_date: date = None) -> str:
-    """
-    Calculate the next garbage collection date.
-    Returns ISO format date string (YYYY-MM-DD).
-    """
+def get_next_garbage_date(garbage_day: str, from_date: date = None) -> Optional[str]:
+    """Calculate the next garbage collection date. Returns ISO format date string."""
     if from_date is None:
         from_date = date.today()
 
@@ -67,28 +109,21 @@ def get_next_garbage_date(garbage_day: str, from_date: date = None) -> str:
     return next_date.isoformat()
 
 
-def get_next_recycling_date(garbage_day: str, recycling_week: str, from_date: date = None) -> str:
+def get_next_recycling_date(garbage_day: str, recycling_week: str, from_date: date = None) -> Optional[str]:
     """
     Calculate the next recycling collection date.
     Recycling is collected on the same day as garbage, but only on odd or even weeks.
-    Returns ISO format date string (YYYY-MM-DD).
+    Returns ISO format date string.
     """
     if from_date is None:
         from_date = date.today()
 
-    if garbage_day not in DAY_TO_WEEKDAY:
-        return None
-
-    if recycling_week not in ('odd', 'even'):
+    if garbage_day not in DAY_TO_WEEKDAY or recycling_week not in ('odd', 'even'):
         return None
 
     target_weekday = DAY_TO_WEEKDAY[garbage_day]
-
-    # Start from next occurrence of the garbage day
     next_date = get_next_weekday(from_date, target_weekday)
 
-    # Check if that week matches the recycling week parity
-    # If not, add a week
     if get_week_parity(next_date) != recycling_week:
         next_date += timedelta(days=7)
 
@@ -96,54 +131,84 @@ def get_next_recycling_date(garbage_day: str, recycling_week: str, from_date: da
 
 
 def build_next_events(postal_code: str, waste_schedule: dict = None) -> dict:
-    """
-    Build the next_events object for the response.
-    """
+    """Build the next_events object for the response."""
     next_events = {
         'snow_removal': None,
         'garbage': None,
         'recycling': None
     }
 
-    # Check for active snow removal operation
     try:
-        has_operation, streets = check_postal_code(postal_code)
+        has_operation, _ = check_postal_code(postal_code)
         if has_operation:
             next_events['snow_removal'] = date.today().isoformat()
     except Exception as e:
         logger.error(f"Error checking snow removal for {postal_code}: {e}")
 
-    # Calculate next waste collection dates
     if waste_schedule:
         garbage_day = waste_schedule.get('garbage_day')
         recycling_week = waste_schedule.get('recycling_week')
 
         if garbage_day:
             next_events['garbage'] = get_next_garbage_date(garbage_day)
-
-        if garbage_day and recycling_week:
-            next_events['recycling'] = get_next_recycling_date(garbage_day, recycling_week)
+            if recycling_week:
+                next_events['recycling'] = get_next_recycling_date(garbage_day, recycling_week)
 
     return next_events
-
-
-def is_valid_email(email: str) -> bool:
-    """Validate email format."""
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
-
-
-def is_valid_postal_code(postal_code: str) -> bool:
-    """Validate Canadian postal code format."""
-    normalized = postal_code.upper().replace(' ', '')
-    pattern = r'^[A-Z]\d[A-Z]\d[A-Z]\d$'
-    return bool(re.match(pattern, normalized))
 
 
 @bp.route('/')
 def index():
     """Serve the main page."""
     return render_template('index.html')
+
+
+def _extract_preferences(data: dict) -> Tuple[bool, bool, bool]:
+    """Extract and parse alert preferences from request data."""
+    preferences = data.get('preferences', {})
+    if isinstance(preferences, str):
+        preferences = {}
+
+    snow_alerts = parse_bool_preference(preferences.get('snow_alerts'), default=True)
+    garbage_alerts = parse_bool_preference(preferences.get('garbage_alerts'), default=False)
+    recycling_alerts = parse_bool_preference(preferences.get('recycling_alerts'), default=False)
+
+    return snow_alerts, garbage_alerts, recycling_alerts
+
+
+def _fetch_waste_schedule(postal_code: str, garbage_alerts: bool, recycling_alerts: bool):
+    """Fetch waste schedule if waste alerts are enabled. Returns (waste_zone_id, waste_schedule)."""
+    if not (garbage_alerts or recycling_alerts):
+        return None, None
+
+    try:
+        waste_schedule = get_schedule(postal_code)
+        if waste_schedule:
+            logger.info(f"Scraped waste schedule for {postal_code}: zone_id={waste_schedule.get('zone_id')}")
+            return waste_schedule.get('zone_id'), waste_schedule
+        logger.warning(f"Could not scrape waste schedule for {postal_code}")
+    except Exception as e:
+        logger.error(f"Error scraping waste schedule for {postal_code}: {e}")
+
+    return None, None
+
+
+def _build_subscribe_response(message: str, preferences: dict, next_events: dict, waste_schedule: dict = None) -> dict:
+    """Build the response data for subscribe/update endpoints."""
+    response_data = {
+        'success': True,
+        'message': message,
+        'preferences': preferences,
+        'next_events': next_events
+    }
+
+    if waste_schedule:
+        response_data['waste_schedule'] = {
+            'garbage_day': waste_schedule.get('garbage_day'),
+            'recycling_week': waste_schedule.get('recycling_week')
+        }
+
+    return response_data
 
 
 @bp.route('/subscribe', methods=['POST'])
@@ -154,64 +219,33 @@ def subscribe():
     email = data.get('email', '').strip()
     postal_code = data.get('postal_code', '').strip()
 
-    # Extract preferences (defaults: snow=True, garbage=False, recycling=False)
-    preferences = data.get('preferences', {})
-    if isinstance(preferences, str):
-        preferences = {}
+    # Validate inputs
+    error, code = validate_email_field(email)
+    if error:
+        return error, code
 
-    snow_alerts = preferences.get('snow_alerts', True)
-    garbage_alerts = preferences.get('garbage_alerts', False)
-    recycling_alerts = preferences.get('recycling_alerts', False)
+    error, code = validate_postal_code_field(postal_code)
+    if error:
+        return error, code
 
-    # Convert string booleans if needed (from form data)
-    if isinstance(snow_alerts, str):
-        snow_alerts = snow_alerts.lower() in ('true', '1', 'yes', 'on')
-    if isinstance(garbage_alerts, str):
-        garbage_alerts = garbage_alerts.lower() in ('true', '1', 'yes', 'on')
-    if isinstance(recycling_alerts, str):
-        recycling_alerts = recycling_alerts.lower() in ('true', '1', 'yes', 'on')
+    # Extract preferences
+    snow_alerts, garbage_alerts, recycling_alerts = _extract_preferences(data)
 
-    # Validate email
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    if not is_valid_email(email):
-        return jsonify({'error': 'Invalid email format'}), 400
-
-    # Validate postal code
-    if not postal_code:
-        return jsonify({'error': 'Postal code is required'}), 400
-    if not is_valid_postal_code(postal_code):
-        return jsonify({'error': 'Invalid postal code format. Use format like G1R 2K8'}), 400
-
-    # Validate at least one alert type is selected
-    if not snow_alerts and not garbage_alerts and not recycling_alerts:
+    if not (snow_alerts or garbage_alerts or recycling_alerts):
         return jsonify({'error': 'At least one alert type must be enabled'}), 400
-
-    # Check for existing user
-    existing = get_user_by_email(email)
 
     # Geocode postal code
     location = geocode_postal_code(postal_code)
     if not location:
         return jsonify({'error': 'Could not find postal code. Make sure it is in Quebec City.'}), 400
 
-    # If waste alerts are enabled, scrape the schedule to get zone_id
-    waste_zone_id = None
-    waste_schedule = None
-    if garbage_alerts or recycling_alerts:
-        try:
-            waste_schedule = get_schedule(postal_code)
-            if waste_schedule:
-                waste_zone_id = waste_schedule.get('zone_id')
-                logger.info(f"Scraped waste schedule for {postal_code}: zone_id={waste_zone_id}")
-            else:
-                logger.warning(f"Could not scrape waste schedule for {postal_code}")
-        except Exception as e:
-            logger.error(f"Error scraping waste schedule for {postal_code}: {e}")
-            # Continue without waste zone - user can still subscribe
+    # Fetch waste schedule if needed
+    waste_zone_id, waste_schedule = _fetch_waste_schedule(postal_code, garbage_alerts, recycling_alerts)
+
+    # Check for existing user and create/update accordingly
+    existing = get_user_by_email(email)
 
     if existing:
-        # Update existing user's preferences
         try:
             update_user_preferences(
                 email=email,
@@ -225,12 +259,11 @@ def subscribe():
             )
             status_code = 200
             message = f'Successfully updated preferences for {email}'
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Failed to update preferences'}), 500
     else:
-        # Add new user to database
         try:
-            user = add_user(
+            add_user(
                 email=email,
                 postal_code=postal_code,
                 lat=location['lat'],
@@ -242,92 +275,49 @@ def subscribe():
             )
             status_code = 201
             message = f'Successfully subscribed {email} for postal code {postal_code}'
-
-            # Send welcome email for new subscriptions
             send_welcome_email(email, postal_code)
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Failed to save subscription'}), 500
 
-    # Build next events
     next_events = build_next_events(postal_code, waste_schedule)
-
-    # Build response
-    response_data = {
-        'success': True,
-        'message': message,
-        'preferences': {
-            'snow_alerts': snow_alerts,
-            'garbage_alerts': garbage_alerts,
-            'recycling_alerts': recycling_alerts
-        },
-        'next_events': next_events
+    preferences = {
+        'snow_alerts': snow_alerts,
+        'garbage_alerts': garbage_alerts,
+        'recycling_alerts': recycling_alerts
     }
 
-    # Include waste schedule info if available
-    if waste_schedule:
-        response_data['waste_schedule'] = {
-            'garbage_day': waste_schedule.get('garbage_day'),
-            'recycling_week': waste_schedule.get('recycling_week')
-        }
-
-    return jsonify(response_data), status_code
+    return jsonify(_build_subscribe_response(message, preferences, next_events, waste_schedule)), status_code
 
 
 @bp.route('/preferences', methods=['PUT'])
 def update_preferences():
     """Update alert preferences for an existing user."""
     data = request.get_json() or request.form
-
     email = data.get('email', '').strip()
 
     # Validate email
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    if not is_valid_email(email):
-        return jsonify({'error': 'Invalid email format'}), 400
+    error, code = validate_email_field(email)
+    if error:
+        return error, code
 
     # Check if user exists
     user = get_user_by_email(email)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    # Extract preferences from request
-    snow_alerts = data.get('snow_alerts')
-    garbage_alerts = data.get('garbage_alerts')
-    recycling_alerts = data.get('recycling_alerts')
+    # Extract and merge preferences with existing values
+    snow_alerts = parse_bool_preference(data.get('snow_alerts'), user.snow_alerts_enabled)
+    garbage_alerts = parse_bool_preference(data.get('garbage_alerts'), user.garbage_alerts_enabled)
+    recycling_alerts = parse_bool_preference(data.get('recycling_alerts'), user.recycling_alerts_enabled)
 
-    # Convert string booleans if needed (from form data)
-    if isinstance(snow_alerts, str):
-        snow_alerts = snow_alerts.lower() in ('true', '1', 'yes', 'on')
-    if isinstance(garbage_alerts, str):
-        garbage_alerts = garbage_alerts.lower() in ('true', '1', 'yes', 'on')
-    if isinstance(recycling_alerts, str):
-        recycling_alerts = recycling_alerts.lower() in ('true', '1', 'yes', 'on')
-
-    # Use existing values if not provided
-    if snow_alerts is None:
-        snow_alerts = user.snow_alerts_enabled
-    if garbage_alerts is None:
-        garbage_alerts = user.garbage_alerts_enabled
-    if recycling_alerts is None:
-        recycling_alerts = user.recycling_alerts_enabled
-
-    # Validate at least one alert type is selected
-    if not snow_alerts and not garbage_alerts and not recycling_alerts:
+    if not (snow_alerts or garbage_alerts or recycling_alerts):
         return jsonify({'error': 'At least one alert type must be enabled'}), 400
 
-    # If waste alerts are newly enabled and user has no waste_zone, fetch schedule
+    # Fetch waste schedule if waste alerts newly enabled and no zone assigned
     waste_zone_id = user.waste_zone_id
     waste_schedule = None
     if (garbage_alerts or recycling_alerts) and not waste_zone_id:
-        try:
-            postal_code = user.postal_code
-            waste_schedule = get_schedule(postal_code)
-            if waste_schedule:
-                waste_zone_id = waste_schedule.get('zone_id')
-                logger.info(f"Scraped waste schedule for {postal_code}: zone_id={waste_zone_id}")
-        except Exception as e:
-            logger.error(f"Error scraping waste schedule: {e}")
+        waste_zone_id, waste_schedule = _fetch_waste_schedule(user.postal_code, garbage_alerts, recycling_alerts)
 
     # Update preferences
     try:
@@ -342,18 +332,18 @@ def update_preferences():
         logger.error(f"Error updating preferences for {email}: {e}")
         return jsonify({'error': 'Failed to update preferences'}), 500
 
-    # Build response
+    preferences = {
+        'snow_alerts': snow_alerts,
+        'garbage_alerts': garbage_alerts,
+        'recycling_alerts': recycling_alerts
+    }
+
     response_data = {
         'success': True,
         'message': f'Successfully updated preferences for {email}',
-        'preferences': {
-            'snow_alerts': snow_alerts,
-            'garbage_alerts': garbage_alerts,
-            'recycling_alerts': recycling_alerts
-        }
+        'preferences': preferences
     }
 
-    # Include waste schedule info if available
     if waste_schedule:
         response_data['waste_schedule'] = {
             'garbage_day': waste_schedule.get('garbage_day'),
@@ -368,13 +358,10 @@ def get_subscriber(email: str):
     """Get subscription status and preferences for a user."""
     email = email.strip()
 
-    # Validate email
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    if not is_valid_email(email):
-        return jsonify({'error': 'Invalid email format'}), 400
+    error, code = validate_email_field(email)
+    if error:
+        return error, code
 
-    # Check if user exists
     user = get_user_by_email(email)
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -385,14 +372,10 @@ def get_subscriber(email: str):
         waste_zone = get_waste_zone_by_id(user.waste_zone_id)
         if waste_zone:
             waste_schedule = {
-                'garbage_day': waste_zone.garbage_day,
-                'recycling_week': waste_zone.recycling_week
+                'garbage_day': waste_zone['garbage_day'],
+                'recycling_week': waste_zone['recycling_week']
             }
 
-    # Build next events
-    next_events = build_next_events(user.postal_code, waste_schedule)
-
-    # Build response
     response_data = {
         'email': user.email,
         'postal_code': user.postal_code,
@@ -402,10 +385,9 @@ def get_subscriber(email: str):
             'garbage_alerts': user.garbage_alerts_enabled,
             'recycling_alerts': user.recycling_alerts_enabled
         },
-        'next_events': next_events
+        'next_events': build_next_events(user.postal_code, waste_schedule)
     }
 
-    # Include waste schedule info if available
     if waste_schedule:
         response_data['waste_schedule'] = waste_schedule
 
@@ -416,23 +398,15 @@ def get_subscriber(email: str):
 def unsubscribe():
     """Unsubscribe a user from all alerts and remove their subscription."""
     data = request.get_json() or request.form
-
     email = data.get('email', '').strip()
 
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    if not is_valid_email(email):
-        return jsonify({'error': 'Invalid email format'}), 400
+    error, code = validate_email_field(email)
+    if error:
+        return error, code
 
-    removed = remove_user(email)
-
-    if removed:
-        return jsonify({
-            'success': True,
-            'message': f'Successfully unsubscribed {email}'
-        }), 200
-    else:
-        return jsonify({'error': 'Email not found'}), 404
+    if remove_user(email):
+        return jsonify({'success': True, 'message': f'Successfully unsubscribed {email}'}), 200
+    return jsonify({'error': 'Email not found'}), 404
 
 
 @bp.route('/status/<postal_code>')
@@ -442,12 +416,15 @@ def status(postal_code: str):
         return jsonify({'error': 'Invalid postal code format'}), 400
 
     has_operation, streets = check_postal_code(postal_code)
+    normalized_code = postal_code.upper().replace(' ', '')
+
+    message = 'Snow removal in progress - NO PARKING' if has_operation else 'No active snow removal operation'
 
     return jsonify({
-        'postal_code': postal_code.upper().replace(' ', ''),
+        'postal_code': normalized_code,
         'has_operation': has_operation,
         'streets_affected': streets,
-        'message': 'Snow removal in progress - NO PARKING' if has_operation else 'No active snow removal operation'
+        'message': message
     }), 200
 
 
@@ -457,7 +434,6 @@ def schedule(postal_code: str):
     if not is_valid_postal_code(postal_code):
         return jsonify({'error': 'Invalid postal code format'}), 400
 
-    # Try to get schedule (from cache or scrape)
     try:
         waste_schedule = get_schedule(postal_code)
     except Exception as e:
@@ -467,46 +443,93 @@ def schedule(postal_code: str):
     if not waste_schedule:
         return jsonify({'error': 'Could not find schedule for this postal code'}), 404
 
-    # Calculate next collection dates
     garbage_day = waste_schedule.get('garbage_day')
     recycling_week = waste_schedule.get('recycling_week')
-
-    next_garbage = get_next_garbage_date(garbage_day) if garbage_day else None
-    next_recycling = get_next_recycling_date(garbage_day, recycling_week) if garbage_day and recycling_week else None
 
     return jsonify({
         'postal_code': postal_code.upper().replace(' ', ''),
         'garbage_day': garbage_day,
         'recycling_week': recycling_week,
-        'next_garbage': next_garbage,
-        'next_recycling': next_recycling
+        'next_garbage': get_next_garbage_date(garbage_day) if garbage_day else None,
+        'next_recycling': get_next_recycling_date(garbage_day, recycling_week) if garbage_day and recycling_week else None
     }), 200
+
+
+@bp.route('/quick-check/<postal_code>')
+def quick_check(postal_code: str):
+    """Quick check snow status and waste schedule for a postal code without subscribing."""
+    if not is_valid_postal_code(postal_code):
+        return jsonify({'error': 'Invalid postal code format. Use format like G1R 2K8'}), 400
+
+    normalized_code = postal_code.upper().replace(' ', '')
+
+    # Get snow status
+    snow_status = {
+        'has_operation': False,
+        'streets_affected': [],
+        'message': 'No active snow removal operation'
+    }
+    try:
+        has_operation, streets = check_postal_code(postal_code)
+        snow_status = {
+            'has_operation': has_operation,
+            'streets_affected': streets,
+            'message': 'Snow removal in progress - NO PARKING' if has_operation else 'No active snow removal operation'
+        }
+    except Exception as e:
+        logger.error(f"Error checking snow status for {normalized_code}: {e}")
+
+    # Get waste schedule
+    waste_schedule = None
+    waste_schedule_error = None
+    next_events = {
+        'next_garbage': None,
+        'next_recycling': None
+    }
+    try:
+        waste_schedule = get_schedule(postal_code)
+        if waste_schedule:
+            garbage_day = waste_schedule.get('garbage_day')
+            recycling_week = waste_schedule.get('recycling_week')
+            if garbage_day:
+                next_events['next_garbage'] = get_next_garbage_date(garbage_day)
+                if recycling_week:
+                    next_events['next_recycling'] = get_next_recycling_date(garbage_day, recycling_week)
+        else:
+            waste_schedule_error = 'Could not find waste schedule for this postal code'
+            logger.warning(f"Waste schedule not found for postal code: {normalized_code}")
+    except Exception as e:
+        waste_schedule_error = 'Unable to fetch waste schedule. Please try again.'
+        logger.error(f"Error getting waste schedule for {normalized_code}: {type(e).__name__}: {e}")
+
+    response_data = {
+        'postal_code': normalized_code,
+        'snow_status': snow_status,
+        'next_events': next_events,
+        'waste_schedule': {
+            'garbage_day': waste_schedule.get('garbage_day') if waste_schedule else None,
+            'recycling_week': waste_schedule.get('recycling_week') if waste_schedule else None
+        }
+    }
+
+    if waste_schedule_error:
+        response_data['waste_schedule_error'] = waste_schedule_error
+
+    return jsonify(response_data), 200
 
 
 @bp.route('/admin/trigger-check', methods=['GET', 'POST'])
 def admin_trigger_check():
     """Manually trigger the snow removal check for all users."""
     from app.scheduler import trigger_check_now
-
-    result = trigger_check_now()
-
-    return jsonify({
-        'success': True,
-        'message': 'Check triggered successfully',
-        'result': result
-    }), 200
+    return jsonify({'success': True, 'message': 'Check triggered successfully', 'result': trigger_check_now()}), 200
 
 
 @bp.route('/admin/jobs')
 def admin_jobs():
     """View scheduled jobs."""
     from app.scheduler import get_scheduled_jobs
-
-    jobs = get_scheduled_jobs()
-
-    return jsonify({
-        'jobs': jobs
-    }), 200
+    return jsonify({'jobs': get_scheduled_jobs()}), 200
 
 
 @bp.route('/admin/trigger-waste-check', methods=['GET', 'POST'])
@@ -515,7 +538,6 @@ def admin_trigger_waste_check():
     from app.scheduler import trigger_waste_check_now
 
     result = trigger_waste_check_now()
-
     return jsonify({
         'success': True,
         'message': 'Waste check triggered successfully',

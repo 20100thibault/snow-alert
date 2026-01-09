@@ -15,9 +15,31 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# Rate limiting: track last request time
+# Rate limiting
 _last_request_time: Optional[float] = None
 RATE_LIMIT_SECONDS = 10
+CACHE_EXPIRATION_HOURS = 24
+INFO_COLLECTE_URL = "https://www.ville.quebec.qc.ca/services/info-collecte/"
+REQUEST_TIMEOUT = 30
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
+# Mappings for parsing French to English
+DAY_MAPPING = {
+    'lundi': 'monday',
+    'mardi': 'tuesday',
+    'mercredi': 'wednesday',
+    'jeudi': 'thursday',
+    'vendredi': 'friday',
+    'samedi': 'saturday',
+    'dimanche': 'sunday',
+}
+
+WEEK_MAPPING = {
+    'impaire': 'odd',
+    'impaires': 'odd',
+    'paire': 'even',
+    'paires': 'even',
+}
 
 
 def _reset_rate_limit() -> None:
@@ -31,25 +53,11 @@ def _set_last_request_time(timestamp: float) -> None:
     global _last_request_time
     _last_request_time = timestamp
 
-# Cache expiration time
-CACHE_EXPIRATION_HOURS = 24
-
-# Info-Collecte URL
-INFO_COLLECTE_URL = "https://www.ville.quebec.qc.ca/services/info-collecte/"
-
-# Request timeout in seconds
-REQUEST_TIMEOUT = 30
-
-# User agent to use for requests
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-
 
 def _normalize_postal_code(postal_code: str) -> str:
     """Normalize postal code to format 'X1X 1X1'."""
     code = postal_code.upper().replace(' ', '').strip()
-    if len(code) == 6:
-        return f"{code[:3]} {code[3:]}"
-    return code
+    return f"{code[:3]} {code[3:]}" if len(code) == 6 else code
 
 
 def _extract_form_fields(html: str) -> Dict[str, str]:
@@ -91,9 +99,39 @@ def _extract_form_fields(html: str) -> Dict[str, str]:
     return fields
 
 
+def _extract_address_dropdown(html: str) -> Optional[str]:
+    """
+    Extract the first address option from the dropdown if multiple results.
+
+    Args:
+        html: HTML response from first POST
+
+    Returns:
+        Address value to select, or None if no dropdown found
+    """
+    # Look for the address dropdown
+    dropdown_match = re.search(
+        r'<select[^>]*name="ctl00\$ctl00\$contenu\$texte_page\$ucInfoCollecteRechercheAdresse\$RechercheAdresse\$ddChoix"[^>]*>(.*?)</select>',
+        html,
+        re.DOTALL | re.IGNORECASE
+    )
+
+    if not dropdown_match:
+        return None
+
+    # Extract first option value (skip empty placeholder if exists)
+    options = re.findall(r'<option[^>]*value="([^"]+)"', dropdown_match.group(1))
+    for opt in options:
+        if opt and opt.strip():
+            return opt
+
+    return None
+
+
 def _make_request(postal_code: str) -> Optional[str]:
     """
     Make HTTP request to Info-Collecte website.
+    Handles the two-step process: postal code search -> address selection.
 
     Args:
         postal_code: Normalized postal code
@@ -122,12 +160,10 @@ def _make_request(postal_code: str) -> Optional[str]:
             return None
 
         # Step 2: POST with postal code
-        # The form field names are based on the ASP.NET control hierarchy
         post_data = {
             **form_fields,
             'ctl00$ctl00$contenu$texte_page$ucInfoCollecteRechercheAdresse$RechercheAdresse$txtCodePostal': postal_code,
             'ctl00$ctl00$contenu$texte_page$ucInfoCollecteRechercheAdresse$RechercheAdresse$BtnCodePostal': 'Rechercher',
-            'ctl00$ctl00$contenu$texte_page$ucInfoCollecteRechercheAdresse$RechercheAdresse$RadTabStrip1_ClientState': '{"selectedIndexes":["1"],"logEntries":[],"scrollState":{}}',
         }
 
         logger.debug(f"Posting search request for postal code: {postal_code}")
@@ -137,6 +173,35 @@ def _make_request(postal_code: str) -> Optional[str]:
             timeout=REQUEST_TIMEOUT
         )
         post_response.raise_for_status()
+
+        # Check if we got multiple results (address dropdown)
+        address_value = _extract_address_dropdown(post_response.text)
+
+        if address_value:
+            # Step 3: Need to select an address and click "Poursuivre" button
+            logger.debug(f"Multiple addresses found, selecting first: {address_value}")
+
+            # Extract new form fields from response
+            form_fields2 = _extract_form_fields(post_response.text)
+            if not form_fields2.get('__VIEWSTATE'):
+                logger.warning("Could not extract __VIEWSTATE from address selection page")
+                return post_response.text  # Try to parse anyway
+
+            # Submit with selected address and click "Poursuivre" button
+            post_data2 = {
+                **form_fields2,
+                'ctl00$ctl00$contenu$texte_page$ucInfoCollecteRechercheAdresse$RechercheAdresse$txtCodePostal': postal_code,
+                'ctl00$ctl00$contenu$texte_page$ucInfoCollecteRechercheAdresse$RechercheAdresse$ddChoix': address_value,
+                'ctl00$ctl00$contenu$texte_page$ucInfoCollecteRechercheAdresse$RechercheAdresse$btnChoix': 'Poursuivre',
+            }
+
+            post_response2 = session.post(
+                INFO_COLLECTE_URL,
+                data=post_data2,
+                timeout=REQUEST_TIMEOUT
+            )
+            post_response2.raise_for_status()
+            return post_response2.text
 
         return post_response.text
 
@@ -185,6 +250,69 @@ def scrape_schedule(postal_code: str) -> Optional[Dict[str, Any]]:
     return parse_schedule_html(html)
 
 
+def _find_garbage_day(text_content: str) -> Optional[str]:
+    """Find garbage collection day from text content."""
+    # Look for "prochaine collecte" pattern which indicates the next pickup day
+    # Pattern: "prochaine collecte : mardi 20 janvier" or similar
+    prochaine_match = re.search(
+        r'prochaine collecte\s*:\s*(\w+)\s+\d+',
+        text_content
+    )
+    if prochaine_match:
+        day_word = prochaine_match.group(1).lower()
+        if day_word in DAY_MAPPING:
+            return DAY_MAPPING[day_word]
+
+    # Look for "jour de collecte : mardi" pattern
+    jour_match = re.search(
+        r'jour de collecte\s*:\s*(\w+)',
+        text_content
+    )
+    if jour_match:
+        day_word = jour_match.group(1).lower()
+        if day_word in DAY_MAPPING:
+            return DAY_MAPPING[day_word]
+
+    # Look for patterns like "ordures le lundi" or "lundi ... ordures"
+    for french_day, english_day in DAY_MAPPING.items():
+        if french_day not in text_content:
+            continue
+
+        ordures_pattern = re.search(rf'(?:ordures|déchets)[^.]*{french_day}', text_content)
+        day_ordures_pattern = re.search(rf'{french_day}[^.]*(?:ordures|déchets)', text_content)
+
+        if ordures_pattern or day_ordures_pattern:
+            return english_day
+
+    # Fallback: look for "(1x/semaine) : mardi" pattern (summer schedule)
+    summer_match = re.search(
+        r'1x/semaine\)\s*:\s*(\w+)',
+        text_content
+    )
+    if summer_match:
+        day_word = summer_match.group(1).lower()
+        if day_word in DAY_MAPPING:
+            return DAY_MAPPING[day_word]
+
+    return None
+
+
+def _find_recycling_week(text_content: str) -> Optional[str]:
+    """Find recycling week parity from text content."""
+    # First check for explicit odd/even
+    for french_week, english_week in WEEK_MAPPING.items():
+        if french_week in text_content:
+            return english_week
+
+    # Check for "chaque 2 semaines" pattern which indicates bi-weekly
+    # In this case, we can't determine odd/even, but we know it's bi-weekly
+    if 'chaque 2 semaines' in text_content or 'aux 2 semaines' in text_content:
+        # Return 'biweekly' as a fallback - the caller can handle this
+        return 'biweekly'
+
+    return None
+
+
 def parse_schedule_html(html: str) -> Optional[Dict[str, Any]]:
     """
     Parse the HTML response from Info-Collecte to extract schedule data.
@@ -195,86 +323,50 @@ def parse_schedule_html(html: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dict with 'garbage_day' and 'recycling_week' keys, or None if parsing failed.
     """
-    # French to English day name mapping
-    day_mapping = {
-        'lundi': 'monday',
-        'mardi': 'tuesday',
-        'mercredi': 'wednesday',
-        'jeudi': 'thursday',
-        'vendredi': 'friday',
-        'samedi': 'saturday',
-        'dimanche': 'sunday',
-    }
-
-    # French to English week type mapping
-    week_mapping = {
-        'impaire': 'odd',
-        'impaires': 'odd',
-        'paire': 'even',
-        'paires': 'even',
-    }
-
     try:
         soup = BeautifulSoup(html, 'html.parser')
-
-        garbage_day = None
-        recycling_week = None
-
-        # Look for garbage collection day
-        # Try to find text containing "ordures" or "déchets"
         text_content = soup.get_text().lower()
 
-        # Pattern for garbage day: look for day of week near "ordures" or "collecte"
-        for french_day, english_day in day_mapping.items():
-            # Check if day appears in context of garbage collection
-            if french_day in text_content:
-                # Look for patterns like "Collecte des ordures: Lundi" or "ordures le lundi"
-                ordures_pattern = re.search(
-                    rf'(?:ordures|déchets|collecte)[^.]*{french_day}',
-                    text_content
-                )
-                day_ordures_pattern = re.search(
-                    rf'{french_day}[^.]*(?:ordures|déchets)',
-                    text_content
-                )
-                if ordures_pattern or day_ordures_pattern:
-                    garbage_day = english_day
-                    break
+        garbage_day = _find_garbage_day(text_content)
+        if not garbage_day:
+            logger.warning("Could not parse schedule from HTML")
+            return None
 
-        # If no specific pattern found, just look for any day name
-        if garbage_day is None:
-            for french_day, english_day in day_mapping.items():
-                if french_day in text_content:
-                    garbage_day = english_day
-                    break
-
-        # Pattern for recycling week: look for "impaire" or "paire"
-        for french_week, english_week in week_mapping.items():
-            if french_week in text_content:
-                recycling_week = english_week
-                break
-
-        # If we found at least the garbage day, return results
-        if garbage_day:
-            return {
-                'garbage_day': garbage_day,
-                'recycling_week': recycling_week
-            }
-
-        logger.warning("Could not parse schedule from HTML")
-        return None
+        return {
+            'garbage_day': garbage_day,
+            'recycling_week': _find_recycling_week(text_content)
+        }
 
     except Exception as e:
         logger.error(f"Error parsing schedule HTML: {e}")
         return None
 
 
+def _enforce_rate_limit() -> None:
+    """Enforce rate limiting between requests. Blocks if called too soon."""
+    global _last_request_time
+
+    if _last_request_time is None:
+        return
+
+    elapsed = time.time() - _last_request_time
+    if elapsed < RATE_LIMIT_SECONDS:
+        wait_time = RATE_LIMIT_SECONDS - elapsed
+        logger.debug(f"Rate limiting: waiting {wait_time:.1f} seconds")
+        time.sleep(wait_time)
+
+
+def _is_cache_expired(updated_at: datetime) -> bool:
+    """Check if cached data is expired (older than CACHE_EXPIRATION_HOURS)."""
+    if updated_at is None:
+        return True
+    expiration_time = updated_at + timedelta(hours=CACHE_EXPIRATION_HOURS)
+    return datetime.utcnow() > expiration_time
+
+
 def get_cached_schedule(postal_code: str) -> Optional[Dict[str, Any]]:
     """
     Get cached schedule from database if available and not expired.
-
-    Args:
-        postal_code: Canadian postal code
 
     Returns:
         Dict with schedule data if cache hit, None if cache miss or expired.
@@ -282,14 +374,12 @@ def get_cached_schedule(postal_code: str) -> Optional[Dict[str, Any]]:
     from app.database import get_waste_zone
 
     normalized_code = _normalize_postal_code(postal_code).replace(' ', '')
-
     zone = get_waste_zone(normalized_code)
 
     if zone is None:
         logger.debug(f"No cached schedule found for {normalized_code}")
         return None
 
-    # Check if cache is expired
     if _is_cache_expired(zone.get('updated_at')):
         logger.debug(f"Cached schedule for {normalized_code} is expired")
         return None
@@ -302,48 +392,10 @@ def get_cached_schedule(postal_code: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def _enforce_rate_limit() -> None:
-    """
-    Enforce rate limiting between requests.
-    Blocks if called too soon after the last request.
-    """
-    global _last_request_time
-
-    if _last_request_time is not None:
-        elapsed = time.time() - _last_request_time
-        if elapsed < RATE_LIMIT_SECONDS:
-            wait_time = RATE_LIMIT_SECONDS - elapsed
-            logger.debug(f"Rate limiting: waiting {wait_time:.1f} seconds")
-            time.sleep(wait_time)
-
-
-def _is_cache_expired(updated_at: datetime) -> bool:
-    """
-    Check if cached data is expired (older than CACHE_EXPIRATION_HOURS).
-
-    Args:
-        updated_at: Timestamp when cache was last updated
-
-    Returns:
-        True if cache is expired, False otherwise.
-    """
-    if updated_at is None:
-        return True
-
-    expiration_time = updated_at + timedelta(hours=CACHE_EXPIRATION_HOURS)
-    return datetime.utcnow() > expiration_time
-
-
 def get_schedule(postal_code: str, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
     """
     Get collection schedule for a postal code.
     Uses cache if available, otherwise scrapes the website.
-
-    This is the main entry point for getting schedule data.
-
-    Args:
-        postal_code: Canadian postal code
-        force_refresh: If True, bypass cache and scrape fresh data
 
     Returns:
         Dict with 'garbage_day', 'recycling_week', and 'zone_id' keys,

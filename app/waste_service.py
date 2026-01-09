@@ -6,7 +6,7 @@ Business logic for waste collection reminder calculations and processing.
 
 import logging
 from datetime import date, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +157,63 @@ def get_next_collection_dates(zone: Dict[str, Any], from_date: date = None) -> D
     return result
 
 
+def _process_reminders_for_type(
+    users: List,
+    reminder_type: str,
+    tomorrow: date,
+    is_collection_day_fn: Callable,
+    send_reminder_fn: Callable,
+    result: Dict[str, int],
+    result_key: str
+) -> None:
+    """
+    Process reminders for a specific type (garbage or recycling).
+
+    Args:
+        users: List of users to process
+        reminder_type: Type of reminder ('garbage' or 'recycling')
+        tomorrow: The collection date
+        is_collection_day_fn: Function to check if tomorrow is a collection day
+        send_reminder_fn: Function to send the reminder email
+        result: Result dict to update
+        result_key: Key in result dict for successful sends
+    """
+    from app.database import get_waste_zone_by_id, was_reminder_sent, record_reminder_sent
+
+    for user in users:
+        try:
+            if not user.waste_zone_id:
+                logger.debug(f"User {user.email} has no waste zone assigned, skipping")
+                result['skipped'] += 1
+                continue
+
+            zone = get_waste_zone_by_id(user.waste_zone_id)
+            if not zone:
+                logger.warning(f"Waste zone {user.waste_zone_id} not found for user {user.email}")
+                result['skipped'] += 1
+                continue
+
+            if not is_collection_day_fn(zone, tomorrow):
+                continue
+
+            if was_reminder_sent(user.id, reminder_type, tomorrow):
+                logger.debug(f"{reminder_type.capitalize()} reminder already sent to {user.email} for {tomorrow}")
+                result['skipped'] += 1
+                continue
+
+            if send_reminder_fn(user.email, user.postal_code, tomorrow):
+                record_reminder_sent(user.id, reminder_type, tomorrow)
+                result[result_key] += 1
+                logger.info(f"{reminder_type.capitalize()} reminder sent to {user.email}")
+            else:
+                result['errors'] += 1
+                logger.error(f"Failed to send {reminder_type} reminder to {user.email}")
+
+        except Exception as e:
+            result['errors'] += 1
+            logger.error(f"Error processing {reminder_type} reminder for {user.email}: {e}")
+
+
 def process_waste_reminders(check_date: date = None) -> Dict[str, int]:
     """
     Process all waste reminders for the day.
@@ -171,108 +228,42 @@ def process_waste_reminders(check_date: date = None) -> Dict[str, int]:
     Returns:
         Dict with counts: garbage_sent, recycling_sent, skipped, errors
     """
-    from app.database import (
-        get_users_with_garbage_alerts,
-        get_users_with_recycling_alerts,
-        get_waste_zone_by_id,
-        was_reminder_sent,
-        record_reminder_sent
-    )
+    from app.database import get_users_with_garbage_alerts, get_users_with_recycling_alerts
     from app.email_service import send_garbage_reminder, send_recycling_reminder
 
     if check_date is None:
         check_date = date.today()
 
     tomorrow = check_date + timedelta(days=1)
-
-    result = {
-        'garbage_sent': 0,
-        'recycling_sent': 0,
-        'skipped': 0,
-        'errors': 0
-    }
+    result = {'garbage_sent': 0, 'recycling_sent': 0, 'skipped': 0, 'errors': 0}
 
     logger.info(f"Processing waste reminders for {check_date}")
 
     # Process garbage reminders
     garbage_users = get_users_with_garbage_alerts()
     logger.info(f"Found {len(garbage_users)} users with garbage alerts enabled")
-
-    for user in garbage_users:
-        try:
-            if not user.waste_zone_id:
-                logger.debug(f"User {user.email} has no waste zone assigned, skipping")
-                result['skipped'] += 1
-                continue
-
-            zone = get_waste_zone_by_id(user.waste_zone_id)
-            if not zone:
-                logger.warning(f"Waste zone {user.waste_zone_id} not found for user {user.email}")
-                result['skipped'] += 1
-                continue
-
-            # Check if tomorrow is garbage day
-            if not is_garbage_day(zone, tomorrow):
-                continue
-
-            # Check if reminder was already sent
-            if was_reminder_sent(user.id, 'garbage', tomorrow):
-                logger.debug(f"Garbage reminder already sent to {user.email} for {tomorrow}")
-                result['skipped'] += 1
-                continue
-
-            # Send reminder
-            if send_garbage_reminder(user.email, user.postal_code, tomorrow):
-                record_reminder_sent(user.id, 'garbage', tomorrow)
-                result['garbage_sent'] += 1
-                logger.info(f"Garbage reminder sent to {user.email}")
-            else:
-                result['errors'] += 1
-                logger.error(f"Failed to send garbage reminder to {user.email}")
-
-        except Exception as e:
-            result['errors'] += 1
-            logger.error(f"Error processing garbage reminder for {user.email}: {e}")
+    _process_reminders_for_type(
+        users=garbage_users,
+        reminder_type='garbage',
+        tomorrow=tomorrow,
+        is_collection_day_fn=is_garbage_day,
+        send_reminder_fn=send_garbage_reminder,
+        result=result,
+        result_key='garbage_sent'
+    )
 
     # Process recycling reminders
     recycling_users = get_users_with_recycling_alerts()
     logger.info(f"Found {len(recycling_users)} users with recycling alerts enabled")
-
-    for user in recycling_users:
-        try:
-            if not user.waste_zone_id:
-                logger.debug(f"User {user.email} has no waste zone assigned, skipping")
-                result['skipped'] += 1
-                continue
-
-            zone = get_waste_zone_by_id(user.waste_zone_id)
-            if not zone:
-                logger.warning(f"Waste zone {user.waste_zone_id} not found for user {user.email}")
-                result['skipped'] += 1
-                continue
-
-            # Check if tomorrow is recycling day
-            if not is_recycling_day(zone, tomorrow):
-                continue
-
-            # Check if reminder was already sent
-            if was_reminder_sent(user.id, 'recycling', tomorrow):
-                logger.debug(f"Recycling reminder already sent to {user.email} for {tomorrow}")
-                result['skipped'] += 1
-                continue
-
-            # Send reminder
-            if send_recycling_reminder(user.email, user.postal_code, tomorrow):
-                record_reminder_sent(user.id, 'recycling', tomorrow)
-                result['recycling_sent'] += 1
-                logger.info(f"Recycling reminder sent to {user.email}")
-            else:
-                result['errors'] += 1
-                logger.error(f"Failed to send recycling reminder to {user.email}")
-
-        except Exception as e:
-            result['errors'] += 1
-            logger.error(f"Error processing recycling reminder for {user.email}: {e}")
+    _process_reminders_for_type(
+        users=recycling_users,
+        reminder_type='recycling',
+        tomorrow=tomorrow,
+        is_collection_day_fn=is_recycling_day,
+        send_reminder_fn=send_recycling_reminder,
+        result=result,
+        result_key='recycling_sent'
+    )
 
     logger.info(f"Waste reminders complete: {result}")
     return result

@@ -1195,13 +1195,12 @@ class TestSubscriberEndpoint:
             'recycling_week': 'odd',
             'zone_id': 42
         }
-        # Create a mock waste zone object
-        mock_waste_zone = type('MockWasteZone', (), {
+        # Return a dict as the real function does
+        mock_zone.return_value = {
             'id': 42,
             'garbage_day': 'monday',
             'recycling_week': 'odd'
-        })()
-        mock_zone.return_value = mock_waste_zone
+        }
 
         # Subscribe with waste alerts
         client.post('/subscribe', json={
@@ -1557,6 +1556,292 @@ class TestAdminJobs:
         assert response.status_code == 200
         assert 'jobs' in response.json
         assert len(response.json['jobs']) == 2
+
+
+class TestQuickCheck:
+    """Tests for GET /quick-check/<postal_code> endpoint (Task 7.1)"""
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_valid_postal_code(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns 200 for valid postal code."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = {
+            'garbage_day': 'monday',
+            'recycling_week': 'odd',
+            'zone_id': 1
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_snow_status(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns snow_status object."""
+        mock_check.return_value = (True, ['Rue Test', 'Avenue Example'])
+        mock_schedule.return_value = {
+            'garbage_day': 'tuesday',
+            'recycling_week': 'even',
+            'zone_id': 2
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'snow_status' in response.json
+        assert response.json['snow_status']['has_operation'] is True
+        assert 'Rue Test' in response.json['snow_status']['streets_affected']
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_waste_schedule(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns waste_schedule object."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = {
+            'garbage_day': 'wednesday',
+            'recycling_week': 'odd',
+            'zone_id': 3
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'waste_schedule' in response.json
+        assert response.json['waste_schedule']['garbage_day'] == 'wednesday'
+        assert response.json['waste_schedule']['recycling_week'] == 'odd'
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_next_events(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns next_events with dates."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = {
+            'garbage_day': 'thursday',
+            'recycling_week': 'even',
+            'zone_id': 4
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'next_events' in response.json
+        assert 'next_garbage' in response.json['next_events']
+        assert 'next_recycling' in response.json['next_events']
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_dates_in_iso_format(self, mock_schedule, mock_check, client):
+        """Verify dates are in ISO format (YYYY-MM-DD)."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = {
+            'garbage_day': 'friday',
+            'recycling_week': 'odd',
+            'zone_id': 5
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        import re
+        assert re.match(r'^\d{4}-\d{2}-\d{2}$', response.json['next_events']['next_garbage'])
+        assert re.match(r'^\d{4}-\d{2}-\d{2}$', response.json['next_events']['next_recycling'])
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_normalizes_postal_code(self, mock_schedule, mock_check, client):
+        """Verify postal code is normalized in response."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = {
+            'garbage_day': 'monday',
+            'recycling_week': 'odd',
+            'zone_id': 1
+        }
+
+        response = client.get('/quick-check/g1r 2k8')
+
+        assert response.status_code == 200
+        assert response.json['postal_code'] == 'G1R2K8'
+
+
+class TestQuickCheckInvalidPostalCode:
+    """Tests for quick-check with invalid postal codes (Task 7.2)"""
+
+    def test_quick_check_empty_postal_code(self, client):
+        """Verify quick-check returns 404 for empty postal code (route not matched)."""
+        response = client.get('/quick-check/')
+        assert response.status_code == 404
+
+    def test_quick_check_invalid_format(self, client):
+        """Verify quick-check returns 400 for invalid format like '12345'."""
+        response = client.get('/quick-check/12345')
+        assert response.status_code == 400
+        assert 'Invalid postal code' in response.json['error']
+
+    def test_quick_check_incomplete_postal_code(self, client):
+        """Verify quick-check returns 400 for incomplete postal code."""
+        response = client.get('/quick-check/G1R')
+        assert response.status_code == 400
+        assert 'Invalid postal code' in response.json['error']
+
+    def test_quick_check_error_message_explains_format(self, client):
+        """Verify error message explains valid postal code format."""
+        response = client.get('/quick-check/INVALID')
+        assert response.status_code == 400
+        assert 'G1R 2K8' in response.json['error']
+
+
+class TestQuickCheckGeocodingFailure:
+    """Tests for quick-check handling geocoding failures (Task 7.3)"""
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_200_when_snow_check_fails(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns 200 even when snow check raises exception."""
+        mock_check.side_effect = Exception("Geocoding failed")
+        mock_schedule.return_value = {
+            'garbage_day': 'monday',
+            'recycling_week': 'odd',
+            'zone_id': 1
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        # Snow status should have default values
+        assert response.json['snow_status']['has_operation'] is False
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_still_returns_waste_schedule_on_snow_failure(self, mock_schedule, mock_check, client):
+        """Verify waste schedule is still returned when snow check fails."""
+        mock_check.side_effect = Exception("Geocoding timeout")
+        mock_schedule.return_value = {
+            'garbage_day': 'tuesday',
+            'recycling_week': 'even',
+            'zone_id': 2
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'waste_schedule' in response.json
+        assert response.json['waste_schedule']['garbage_day'] == 'tuesday'
+
+
+class TestQuickCheckScrapingFailure:
+    """Tests for quick-check handling scraping failures (Task 7.4)"""
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_200_when_scraping_fails(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns 200 with partial data when scraping fails."""
+        mock_check.return_value = (True, ['Rue Test'])
+        mock_schedule.side_effect = Exception("Scraping failed")
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_snow_status_returned_when_scraping_fails(self, mock_schedule, mock_check, client):
+        """Verify snow status is still returned when scraping fails."""
+        mock_check.return_value = (True, ['Avenue Example'])
+        mock_schedule.side_effect = Exception("Network timeout")
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert response.json['snow_status']['has_operation'] is True
+        assert 'Avenue Example' in response.json['snow_status']['streets_affected']
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_waste_schedule_always_present(self, mock_schedule, mock_check, client):
+        """Verify waste_schedule object is always in response."""
+        mock_check.return_value = (False, [])
+        mock_schedule.side_effect = Exception("Scraping error")
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'waste_schedule' in response.json
+        assert response.json['waste_schedule']['garbage_day'] is None
+        assert response.json['waste_schedule']['recycling_week'] is None
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_null_next_events_when_scraping_fails(self, mock_schedule, mock_check, client):
+        """Verify next_events has null dates when scraping fails."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = None  # Scrape returned None
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert response.json['next_events']['next_garbage'] is None
+        assert response.json['next_events']['next_recycling'] is None
+
+
+class TestQuickCheckWasteScheduleError:
+    """Tests for quick-check waste_schedule_error field (Task 8.3)"""
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_waste_error_on_exception(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns waste_schedule_error when scraping raises exception."""
+        mock_check.return_value = (False, [])
+        mock_schedule.side_effect = Exception("Network error")
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'waste_schedule_error' in response.json
+        assert 'Unable to fetch' in response.json['waste_schedule_error']
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_returns_waste_error_on_none(self, mock_schedule, mock_check, client):
+        """Verify quick-check returns waste_schedule_error when schedule is None."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = None
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'waste_schedule_error' in response.json
+        assert 'Could not find' in response.json['waste_schedule_error']
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_no_waste_error_on_success(self, mock_schedule, mock_check, client):
+        """Verify quick-check has no waste_schedule_error on success."""
+        mock_check.return_value = (False, [])
+        mock_schedule.return_value = {
+            'garbage_day': 'monday',
+            'recycling_week': 'odd',
+            'zone_id': 1
+        }
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert 'waste_schedule_error' not in response.json
+
+    @patch('app.routes.check_postal_code')
+    @patch('app.routes.get_schedule')
+    def test_quick_check_snow_still_works_with_waste_error(self, mock_schedule, mock_check, client):
+        """Verify snow status is returned even when waste has error."""
+        mock_check.return_value = (True, ['Rue Example'])
+        mock_schedule.side_effect = Exception("Timeout")
+
+        response = client.get('/quick-check/G1R2K8')
+
+        assert response.status_code == 200
+        assert response.json['snow_status']['has_operation'] is True
+        assert 'waste_schedule_error' in response.json
 
 
 class TestErrorHandlers:
