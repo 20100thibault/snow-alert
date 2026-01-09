@@ -1,63 +1,44 @@
+name: Scheduled Alert Triggers
 
-  name: Scheduled Alert Triggers
+on:
+  schedule:
+    - cron: '56 20 * * *'
+    - cron: '0 21 * * *'
+    - cron: '56 22 * * *'
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
-  on:
-    schedule:
-      # Wake up server at 3:56 PM ET (20:56 UTC)
-      - cron: '56 20 * * *'
-      # Trigger snow check at 4:00 PM ET (21:00 UTC)
-      - cron: '0 21 * * *'
-      # Wake up server at 5:56 PM ET (22:56 UTC)
-      - cron: '56 22 * * *'
-      # Trigger waste check at 6:00 PM ET (23:00 UTC)
-      - cron: '0 23 * * *'
-    workflow_dispatch: # Allow manual trigger for testing
+jobs:
+  trigger-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine action based on time
+        id: check-time
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          echo "Current UTC time: $HOUR:$MINUTE"
+          if [ "$MINUTE" = "56" ]; then
+            echo "action=wake" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "21" ] && [ "$MINUTE" = "00" ]; then
+            echo "action=snow" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "23" ] && [ "$MINUTE" = "00" ]; then
+            echo "action=waste" >> $GITHUB_OUTPUT
+          else
+            echo "action=wake" >> $GITHUB_OUTPUT
+          fi
 
-  jobs:
-    trigger-alerts:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Determine action based on time
-          id: check-time
-          run: |
-            HOUR=$(date -u +%H)
-            MINUTE=$(date -u +%M)
-            echo "Current UTC time: $HOUR:$MINUTE"
+      - name: Wake up server
+        if: steps.check-time.outputs.action == 'wake'
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" ${{ secrets.RENDER_URL }} || true
 
-            if [ "$MINUTE" = "56" ]; then
-              echo "action=wake" >> $GITHUB_OUTPUT
-            elif [ "$HOUR" = "21" ] && [ "$MINUTE" = "00" ]; then
-              echo "action=snow" >> $GITHUB_OUTPUT
-            elif [ "$HOUR" = "23" ] && [ "$MINUTE" = "00" ]; then
-              echo "action=waste" >> $GITHUB_OUTPUT
-            else
-              echo "action=wake" >> $GITHUB_OUTPUT
-            fi
+      - name: Trigger snow check
+        if: steps.check-time.outputs.action == 'snow'
+        run: |
+          curl -s ${{ secrets.RENDER_URL }}/admin/trigger-check
 
-        - name: Wake up server
-          if: steps.check-time.outputs.action == 'wake'
-          run: |
-            echo "Waking up server..."
-            curl -s -o /dev/null -w "%{http_code}" ${{ secrets.RENDER_URL }} || true
-            echo "Server pinged"
-
-        - name: Trigger snow check
-          if: steps.check-time.outputs.action == 'snow'
-          run: |
-            echo "Triggering snow removal check..."
-            response=$(curl -s -w "\n%{http_code}" ${{ secrets.RENDER_URL }}/admin/trigger-check)
-            http_code=$(echo "$response" | tail -n1)
-            body=$(echo "$response" | head -n -1)
-            echo "Response: $body"
-            echo "HTTP Status: $http_code"
-
-        - name: Trigger waste check
-          if: steps.check-time.outputs.action == 'waste'
-          run: |
-            echo "Triggering waste reminder check..."
-            response=$(curl -s -w "\n%{http_code}" ${{ secrets.RENDER_URL }}/admin/trigger-waste-check)
-            http_code=$(echo "$response" | tail -n1)
-            body=$(echo "$response" | head -n -1)
-            echo "Response: $body"
-            echo "HTTP Status: $http_code"
-
+      - name: Trigger waste check
+        if: steps.check-time.outputs.action == 'waste'
+        run: |
+          curl -s ${{ secrets.RENDER_URL }}/admin/trigger-waste-check
